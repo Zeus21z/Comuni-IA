@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ business.name }} — Comuni IA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+</head>
+<body data-business-id="{{ business.id }}" data-is-owner="{{ 'true' if is_owner else 'false' }}">
+<!-- HEADER PERFIL -->
+<header class="profile-hero">
+  <div class="container py-5">
+    <div class="row align-items-center">
+      <div class="col-md-3 text-center mb-4 mb-md-0">
+        {% if business.logo %}
+        <img src="{{ business.logo }}" class="profile-avatar-lg" alt="{{ business.name }}" onerror="this.src='/static/img/default-avatar.png'">
+        {% else %}
+        <div class="profile-avatar-lg default">
+          <i class="bi bi-shop fs-1"></i>
+        </div>
+        {% endif %}
+      </div>
+      <div class="col-md-9">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h1 class="h2 fw-bold mb-0">{{ business.name }}</h1>
+          <span class="badge bg-primary fs-6">{{ business.category }}</span>
+        </div>
+        <p class="lead mb-3">{{ business.description }}</p>
+        
+        <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+          <span class="badge bg-success"><i class="bi bi-geo-alt"></i> {{ business.location }}</span>
+          
+          {% if business.whatsapp %}
+          <a href="https://wa.me/{{ business.whatsapp }}" target="_blank" class="btn btn-success btn-sm">
+            <i class="bi bi-whatsapp"></i> WhatsApp
+          </a>
+          {% endif %}
+          
+          {% if business.phone %}
+          <a href="tel:{{ business.phone }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-telephone"></i> {{ business.phone }}
+          </a>
+          {% endif %}
+          
+          {% if business.email %}
+          <a href="mailto:{{ business.email }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-envelope"></i> Email
+          </a>
+          {% endif %}
+          
+          <button id="btn-share" class="btn btn-outline-primary btn-sm" data-business-id="{{ business.id|tojson }}">
+            <i class="bi bi-share"></i> Compartir
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="container pb-5">
+  <div class="row g-4">
+    <!-- CONTENIDO PRINCIPAL -->
+    <div class="col-lg-8">
+      <!-- CATÁLOGO DE PRODUCTOS -->
+      <div class="card shadow-sm rounded-4">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-bag text-primary me-2"></i>Catálogo de Productos</h5>
+          {% if is_owner %}
+          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addProductModal">
+            <i class="bi bi-plus-circle"></i> Agregar Producto
+          </button>
+          {% endif %}
+        </div>
+        <div class="card-body p-0">
+          <div class="row g-3 p-3" id="products-grid">
+            {% if products %}
+              {% for product in products %}
+              <div class="col-md-4 col-6" data-product-id="{{ product.id }}">
+                <div class="product-card h-100">
+                  {% if product.image_url %}
+                  <img src="{{ product.image_url }}" class="product-img" alt="{{ product.name }}" onerror="this.src='https://via.placeholder.com/300x200?text=Sin+Imagen'">
+                  {% else %}
+                  <div class="product-img-placeholder">
+                    <i class="bi bi-image fs-1 text-muted"></i>
+                  </div>
+                  {% endif %}
+                  <div class="product-body p-3">
+                    <h6 class="product-title mb-2">{{ product.name }}</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                      <span class="product-price fw-bold text-primary">Bs. {{ "{:,.2f}".format(product.price) }}</span>
+                      {% if is_owner %}
+                      <button class="btn btn-sm btn-outline-danger" data-product-id="{{ product.id|tojson }}">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            {% else %}
+            <div class="col-12 text-center py-5" id="no-products">
+              <i class="bi bi-bag-x display-4 text-muted mb-3"></i>
+              <h5 class="text-muted">No hay productos aún</h5>
+              <p class="text-muted small">Agrega tu primer producto al catálogo</p>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- MAPA -->
+      <div class="card shadow-sm rounded-4 mt-4">
+        <div class="card-header bg-white border-0">
+          <h5 class="mb-0"><i class="bi bi-geo-alt text-primary me-2"></i>Ubicación</h5>
+        </div>
+        <div class="card-body p-0">
+          <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3921.5!2d-63.182!3d-17.785!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x93f3f8f8f8f8f8f8%3A0x8f8f8f8f8f8f8f8f!2sSanta%20Cruz%20de%20la%20Sierra!5e0!3m2!1ses!2sbo!4v1699999999999" 
+                  class="w-100 rounded-bottom" style="height:300px;border:0" loading="lazy"></iframe>
+        </div>
+      </div>
+
+      <!-- RESEÑAS -->
+      <div class="card shadow-sm rounded-4 mt-4">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <h5 class="mb-0"><i class="bi bi-star-fill text-warning me-2"></i>Reseñas</h5>
+            {% if reviews %}
+            <small class="text-muted">
+              <i class="bi bi-star-fill text-warning"></i> {{ avg_rating }} promedio • {{ reviews|length }} reseñas
+            </small>
+            {% endif %}
+          </div>
+          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addReviewModal">
+            <i class="bi bi-pencil-square"></i> Dejar Reseña
+          </button>
+        </div>
+        <div class="card-body" id="reviews-container">
+          {% if reviews %}
+            {% for review in reviews %}
+            <div class="review-item p-3 mb-3 bg-light rounded-3" data-review-id="{{ review.id }}">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                  <strong class="text-dark"><i class="bi bi-person-circle me-1"></i>{{ review.author }}</strong>
+                  <div class="rating-stars mt-1">
+                    {% for i in range(5) %}
+                      {% if i < review.rating %}
+                      <i class="bi bi-star-fill text-warning"></i>
+                      {% else %}
+                      <i class="bi bi-star text-muted"></i>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                </div>
+                <small class="text-muted"><i class="bi bi-calendar3"></i> {{ review.created_at.strftime('%d/%m/%Y') if review.created_at else 'Reciente' }}</small>
+              </div>
+              <p class="mb-0 text-muted">{{ review.comment }}</p>
+            </div>
+            {% endfor %}
+          {% else %}
+          <div class="text-center py-5">
+            <i class="bi bi-star display-4 text-muted mb-3"></i>
+            <h5 class="text-muted">¡Sé el primero en dejar una reseña!</h5>
+            <p class="text-muted small">Comparte tu experiencia con este negocio</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR MÉTRICAS + IA -->
+    <div class="col-lg-4">
+      <!-- MÉTRICAS -->
+      <div class="card shadow-sm rounded-4 sticky-top" style="top:20px">
+        <div class="card-header bg-white border-0">
+          <h5 class="mb-0"><i class="bi bi-graph-up text-primary me-2"></i>Métricas</h5>
+        </div>
+        <div class="card-body">
+          <div class="metric-card d-flex justify-content-between mb-3 p-3 bg-light rounded-3">
+            <span>👁️ Visitas</span> <strong>127</strong>
+          </div>
+          <div class="metric-card d-flex justify-content-between mb-3 p-3 bg-light rounded-3">
+            <span>⭐ Rating</span> 
+            <strong class="text-warning">
+              {{ avg_rating if avg_rating > 0 else 'Sin reseñas' }}
+            </strong>
+          </div>
+          <div class="metric-card d-flex justify-content-between p-3 bg-light rounded-3">
+            <span>💬 Reseñas</span> <strong>{{ reviews|length }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUGERENCIAS IA -->
+      <div class="card shadow-sm rounded-4 mt-4">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-robot text-primary me-2"></i>Sugerencias IA</h5>
+          <button id="btn-ai" class="btn btn-primary btn-sm">
+            <i class="bi bi-magic"></i> Generar
+          </button>
+        </div>
+        <div class="card-body">
+          <div id="ai-box" class="ai-suggestions p-3 rounded-3 bg-light small">
+            <i class="bi bi-lightning-charge text-primary me-1"></i>
+            Haz clic en "Generar" para ideas personalizadas 🚀
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="bg-primary text-white py-4">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center">
+      <small>&copy; 2025 Comuni IA</small>
+      <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm">🏠 Inicio</a>
+    </div>
+  </div>
+</footer>
+
+<!-- MODAL AGREGAR PRODUCTO -->
+{% if is_owner %}
+<div class="modal fade" id="addProductModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title"><i class="bi bi-plus-circle text-primary me-2"></i>Agregar Producto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form id="addProductForm">
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-tag me-2"></i>Nombre del Producto</label>
+            <input type="text" class="form-control rounded-pill" id="productName" required placeholder="Ej: Pizza Margarita">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-currency-dollar me-2"></i>Precio (Bs.)</label>
+            <input type="number" class="form-control rounded-pill" id="productPrice" required placeholder="50.00" step="0.01" min="0.01">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-image me-2"></i>URL de Imagen</label>
+            <input type="url" class="form-control rounded-pill" id="productImage" placeholder="https://ejemplo.com/imagen.jpg">
+            <small class="text-muted">Opcional - Puedes usar Imgur, Google Drive, etc.</small>
+          </div>
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary rounded-pill py-2">
+              <i class="bi bi-check-circle me-2"></i>Agregar Producto
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- MODAL AGREGAR RESEÑA -->
+<div class="modal fade" id="addReviewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title"><i class="bi bi-star-fill text-warning me-2"></i>Dejar Reseña</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form id="addReviewForm">
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-person me-2"></i>Tu Nombre</label>
+            <input type="text" class="form-control rounded-pill" id="reviewAuthor" required placeholder="Ej: Juan Pérez">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-star me-2"></i>Calificación</label>
+            <div class="rating-input d-flex gap-2 justify-content-center p-3 bg-light rounded-3">
+              <input type="radio" class="btn-check" name="rating" id="star1" value="1" required>
+              <label class="btn btn-outline-warning" for="star1"><i class="bi bi-star-fill"></i></label>
+              
+              <input type="radio" class="btn-check" name="rating" id="star2" value="2">
+              <label class="btn btn-outline-warning" for="star2"><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i></label>
+              
+              <input type="radio" class="btn-check" name="rating" id="star3" value="3">
+              <label class="btn btn-outline-warning" for="star3"><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i></label>
+              
+              <input type="radio" class="btn-check" name="rating" id="star4" value="4">
+              <label class="btn btn-outline-warning" for="star4"><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i></label>
+              
+              <input type="radio" class="btn-check" name="rating" id="star5" value="5">
+              <label class="btn btn-outline-warning" for="star5"><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i></label>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-chat-text me-2"></i>Comentario</label>
+            <textarea class="form-control rounded-3" id="reviewComment" rows="4" required placeholder="Comparte tu experiencia..."></textarea>
+          </div>
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary rounded-pill py-2">
+              <i class="bi bi-send me-2"></i>Publicar Reseña
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHATBOT -->
+<button id="chatbot-toggle" class="chatbot-btn animate-pulse">🤖</button>
+<div id="chatbot-panel" class="chatbot-panel">
+  <div class="chatbot-header d-flex justify-content-between align-items-center">
+    <span>🤖 Chat con {{ business.name }}</span>
+    <button class="btn-close btn-close-white"></button>
+  </div>
+  <div id="chatbot-messages" class="chatbot-messages">
+    <div class="msg-bot">¡Hola! Soy el asistente de {{ business.name }}. ¿En qué te ayudo? 😊</div>
+  </div>
+  <div class="chatbot-input">
+    <input id="chatbot-text" type="text" class="form-control" placeholder="Pregunta aquí...">
+    <button id="chatbot-send" class="btn btn-primary"><i class="bi bi-send"></i></button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
+<script>
+document.getElementById('btn-ai')?.addEventListener('click', async () => {
+  const box = document.getElementById('ai-box');
+  box.innerHTML = '<i class="bi bi-hourglass-split text-primary me-1"></i>Generando ideas...';
+  try {
+    const resp = await fetch('{{ url_for("ai_suggestions", id=business.id) }}');
+    const data = await resp.json();
+    box.innerHTML = data.suggestions ? 
+      data.suggestions.replace(/\n/g, '<br>') : 
+      '<i class="bi bi-exclamation-triangle text-warning"></i>Error';
+  } catch (e) {
+    box.innerHTML = '<i class="bi bi-wifi-off text-danger"></i>Error de conexión';
+  }
+});
+
+function shareBusiness(id) {
+  if (navigator.share) {
+    navigator.share({
+      title: '{{ business.name }}',
+      url: window.location.href
+    });
+  } else {
+    alert('¡Comparte: ' + window.location.href);
+  }
+}
+
+// GESTIÓN DE PRODUCTOS
+function getBusinessId() {
+  return document.body?.dataset.businessId || document.getElementById('btn-share')?.dataset.businessId || null;
+}
+
+function checkIsOwner() {
+  const v = document.body?.dataset.isOwner;
+  return v === 'true' || v === '1' || v === true;
+}
+
+// Agregar producto (solo dueños)
+if (isOwner) {
+  document.getElementById('addProductForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById('productName').value.trim();
+    const price = parseFloat(document.getElementById('productPrice').value);
+    const image_url = document.getElementById('productImage').value.trim();
+    
+    if (!name || price <= 0) {
+      showToast('❌ Por favor completa todos los campos correctamente', 'danger');
+      return;
+    }
+    
+    try {
+  const resp = await fetch(`/api/products/${getBusinessId()}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name, price, image_url })
+      });
+      
+      const data = await resp.json();
+      
+      if (data.success) {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addProductModal'));
+        modal.hide();
+        document.getElementById('addProductForm').reset();
+        showToast('✅ Producto agregado exitosamente', 'success');
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        showToast('❌ ' + (data.error || 'Error al agregar producto'), 'danger');
+      }
+    } catch (e) {
+      showToast('❌ Error de conexión', 'danger');
+      console.error(e);
+    }
+  });
+}
+
+// Eliminar producto
+async function deleteProduct(productId) {
+  if (!confirm('¿Seguro que quieres eliminar este producto?')) return;
+  
+  try {
+    const resp = await fetch(`/api/products/${productId}`, {
+      method: 'DELETE'
+    });
+    
+    const data = await resp.json();
+    
+    if (data.success) {
+      const productEl = document.querySelector(`[data-product-id="${productId}"]`);
+      if (productEl) {
+        productEl.remove();
+        showToast('✅ Producto eliminado', 'success');
+        
+        const grid = document.getElementById('products-grid');
+        if (grid.children.length === 0) {
+          grid.innerHTML = `
+            <div class="col-12 text-center py-5" id="no-products">
+              <i class="bi bi-bag-x display-4 text-muted mb-3"></i>
+              <h5 class="text-muted">No hay productos aún</h5>
+              <p class="text-muted small">Agrega tu primer producto al catálogo</p>
+            </div>
+          `;
+        }
+      }
+    } else {
+      showToast('❌ ' + (data.error || 'Error al eliminar'), 'danger');
+    }
+  } catch (e) {
+    showToast('❌ Error de conexión', 'danger');
+    console.error(e);
+  }
+}
+
+// Event listeners for dynamic buttons (avoid inline onclick with Jinja)
+document.getElementById('btn-share')?.addEventListener('click', (e) => {
+  const id = e.currentTarget.dataset.businessId;
+  shareBusiness(id);
+});
+
+// Delegate delete product buttons
+document.getElementById('products-grid')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-product-id]');
+  if (!btn) return;
+  const pid = btn.dataset.productId;
+  if (pid) deleteProduct(pid);
+});
+
+// GESTIÓN DE RESEÑAS
+document.getElementById('addReviewForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const author = document.getElementById('reviewAuthor').value.trim();
+  const rating = parseInt(document.querySelector('input[name="rating"]:checked')?.value);
+  const comment = document.getElementById('reviewComment').value.trim();
+  
+  if (!author || !rating || !comment) {
+    showToast('❌ Por favor completa todos los campos', 'danger');
+    return;
+  }
+  
+  try {
+  const resp = await fetch(`/api/reviews/${getBusinessId()}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ author, rating, comment })
+    });
+    
+    const data = await resp.json();
+    
+    if (data.success) {
+      const modal = bootstrap.Modal.getInstance(document.getElementById('addReviewModal'));
+      modal.hide();
+      document.getElementById('addReviewForm').reset();
+      showToast('✅ Reseña publicada exitosamente', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showToast('❌ ' + (data.error || 'Error al publicar reseña'), 'danger');
+    }
+  } catch (e) {
+    showToast('❌ Error de conexión', 'danger');
+    console.error(e);
+  }
+});
+
+// SISTEMA DE NOTIFICACIONES TOAST
+function showToast(message, type = 'info') {
+  const toastContainer = document.getElementById('toast-container') || createToastContainer();
+  
+  const toast = document.createElement('div');
+  toast.className = `toast align-items-center text-white bg-${type} border-0 show`;
+  toast.setAttribute('role', 'alert');
+  toast.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">${message}</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  `;
+  
+  toastContainer.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function createToastContainer() {
+  const container = document.createElement('div');
+  container.id = 'toast-container';
+  container.className = 'toast-container position-fixed top-0 end-0 p-3';
+  container.style.zIndex = '9999';
+  document.body.appendChild(container);
+  return container;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Comuni IA — Emprendimientos Santa Cruz</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+</head>
+<body>
+<!-- NAVBAR MODERNA -->
+<nav class="navbar navbar-expand-lg fixed-top">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
+      <i class="bi bi-chat-dots text-primary me-2"></i>Comuni IA
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a href="#sobre" class="nav-link">Sobre</a></li>
+        <li class="nav-item"><a href="#destacados" class="nav-link">Destacados</a></li>
+        {% if session.user_id %}
+        <li class="nav-item"><span class="nav-link"><i class="bi bi-person-circle"></i> {{ session.user_email }}</span></li>
+        <li class="nav-item"><a href="{{ url_for('logout') }}" class="btn btn-outline-primary ms-2">Salir</a></li>
+        {% else %}
+        <li class="nav-item"><a href="{{ url_for('login') }}" class="btn btn-outline-primary ms-2">Iniciar Sesión</a></li>
+        {% endif %}
+        <li class="nav-item"><a href="{{ url_for('register') }}" class="btn btn-primary ms-2">+ Registrar</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO ESPECTACULAR -->
+<section class="hero-gradient py-5">
+  <div class="container text-center py-5">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <h1 class="display-4 fw-bold mb-4 animate-fade-in">🚀 Apoya tu emprendimiento local</h1>
+        <p class="lead mb-4 opacity-90">Descubre +200 negocios cruceños con IA personalizada</p>
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+          <a href="#destacados" class="btn btn-primary btn-lg px-4">Ver Negocios</a>
+          <a href="{{ url_for('register') }}" class="btn btn-outline-light btn-lg px-4">Crear Perfil Gratis</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BUSCADOR MODERNO -->
+<section class="py-4 bg-white">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-10">
+        <div class="search-card p-4 rounded-4 shadow-sm">
+          <form method="GET" action="{{ url_for('home') }}" class="row g-3 align-items-end">
+            <div class="col-md-5">
+              <div class="position-relative">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                <input name="search" class="form-control ps-5" type="text" 
+                       placeholder="🍕 Busca panaderías, ropa, servicios..."
+                       value="{{ search_query if search_query else '' }}">
+              </div>
+            </div>
+            <div class="col-md-3">
+              <select name="category" class="form-select">
+                <option value="">Todas las categorías</option>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>
+                  {{ cat }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <input class="form-control" value="Santa Cruz" disabled>
+            </div>
+            <div class="col-md-2">
+              <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-search"></i> Buscar
+              </button>
+            </div>
+          </form>
+          
+          <!-- Resultados de búsqueda -->
+          {% if search_query or category_filter %}
+          <div class="mt-3">
+            <small class="text-muted">
+              <i class="bi bi-funnel"></i> 
+              Se encontraron <strong>{{ businesses|length }}</strong> resultados
+              {% if search_query %}
+                para "<strong>{{ search_query }}</strong>"
+              {% endif %}
+              {% if category_filter %}
+                en <strong>{{ category_filter }}</strong>
+              {% endif %}
+              <a href="{{ url_for('home') }}" class="ms-2 text-primary">Limpiar filtros</a>
+            </small>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DESTACADOS CON ANIMACIONES -->
+<section id="destacados" class="py-5">
+  <div class="container">
+    <h2 class="h3 text-center mb-5 fw-bold">⭐ Emprendimientos Destacados</h2>
+    <div class="row g-4" id="business-grid">
+      {% for b in businesses %}
+      <div class="col-lg-4 col-md-6">
+        <div class="card-business h-100 animate-slide-up">
+          {% if b.logo %}
+          <img src="{{ b.logo }}" class="card-img-top" alt="{{ b.name }}" loading="lazy">
+          {% else %}
+          <div class="card-img-placeholder">
+            <i class="bi bi-shop fs-1 text-muted"></i>
+          </div>
+          {% endif %}
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h5 class="card-title fw-bold mb-0">{{ b.name }}</h5>
+              <span class="badge bg-primary">{{ b.category }}</span>
+            </div>
+            <p class="card-text text-muted small mb-3">{{ b.description[:80] }}...</p>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <small class="text-muted"><i class="bi bi-geo-alt"></i> {{ b.location }}</small>
+              {% if b.whatsapp %}
+              <small class="text-success"><i class="bi bi-whatsapp"></i></small>
+              {% endif %}
+            </div>
+            <a href="{{ url_for('profile', id=b.id) }}" class="btn btn-primary w-100">Ver Perfil</a>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12 text-center py-5">
+        <i class="bi bi-shop display-1 text-muted mb-4"></i>
+        <h3>Aún no hay negocios</h3>
+        <p class="text-muted">¡Sé el primero! <a href="{{ url_for('register') }}">Regístrate gratis</a></p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- SOBRE NOSOTROS -->
+<section id="sobre" class="py-5 bg-light">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-6">
+        <h2 class="h3 fw-bold mb-4">¿Por qué Comuni IA?</h2>
+        <div class="row g-4">
+          <div class="col-12"><i class="bi bi-robot text-primary me-2"></i> Sugerencias IA personalizadas</div>
+          <div class="col-12"><i class="bi bi-people text-primary me-2"></i> +200 emprendedores conectados</div>
+          <div class="col-12"><i class="bi bi-graph-up text-primary me-2"></i> 300% más visibilidad</div>
+        </div>
+      </div>
+      <div class="col-lg-6 text-center">
+        <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400" alt="Emprendedores" class="img-fluid rounded-4 shadow">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="bg-primary text-white py-4">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-6">
+        <h5><i class="bi bi-chat-dots me-2"></i>Comuni IA</h5>
+        <p class="small">Apoyando emprendimientos cruceños con IA ❤️</p>
+      </div>
+      <div class="col-md-6 text-md-end">
+        <a href="#" class="text-white me-3"><i class="bi bi-facebook fs-4"></i></a>
+        <a href="#" class="text-white me-3"><i class="bi bi-instagram fs-4"></i></a>
+        <a href="#" class="text-white"><i class="bi bi-twitter-x fs-4"></i></a>
+      </div>
+    </div>
+    <hr class="my-3">
+    <small>&copy; 2025 Comuni IA - Santa Cruz, Bolivia</small>
+  </div>
+</footer>
+
+<!-- CHATBOT PRO -->
+<button id="chatbot-toggle" class="chatbot-btn animate-pulse">
+  <i class="bi bi-robot"></i>
+</button>
+<div id="chatbot-panel" class="chatbot-panel">
+  <div class="chatbot-header d-flex justify-content-between align-items-center">
+    <span>🤖 Comuni IA Chat</span>
+    <button class="btn-close btn-close-white"></button>
+  </div>
+  <div id="chatbot-messages" class="chatbot-messages">
+    <div class="msg-bot">¡Hola! ¿En qué te ayudo con tu emprendimiento? 🚀</div>
+  </div>
+  <div class="chatbot-input">
+    <input id="chatbot-text" type="text" class="form-control" placeholder="Escribe aquí...">
+    <button id="chatbot-send" class="btn btn-primary"><i class="bi bi-send"></i></button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
+<script>
+// ANIMACIONES
+document.addEventListener('DOMContentLoaded', () => {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('animate-slide-up');
+      }
+    });
+  });
+  document.querySelectorAll('.card-business').forEach(el => observer.observe(el));
+});
+</script>
+</body>
+</html>
