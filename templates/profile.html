@@ -8,225 +8,511 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet"/>
   <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    .profile-banner {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 250px;
+      position: relative;
+    }
+    .profile-header {
+      margin-top: -100px;
+      position: relative;
+      z-index: 10;
+    }
+    .profile-avatar {
+      width: 150px;
+      height: 150px;
+      border-radius: 20px;
+      border: 5px solid white;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      object-fit: cover;
+      background: white;
+    }
+    .stats-box {
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      border-radius: 16px;
+      padding: 1.5rem;
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+    .stats-box:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .product-card-new {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+      transition: all 0.3s ease;
+    }
+    .product-card-new:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+    }
+    .product-img-new {
+      height: 180px;
+      object-fit: cover;
+      width: 100%;
+    }
+    .review-box {
+      border-left: 4px solid #667eea;
+      border-radius: 12px;
+      padding: 1.5rem;
+      background: #f8fafc;
+      transition: all 0.3s ease;
+    }
+    .review-box:hover {
+      background: white;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 1.5rem;
+      position: relative;
+      padding-bottom: 0.5rem;
+    }
+    .section-title::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 50px;
+      height: 3px;
+      background: #667eea;
+      border-radius: 2px;
+    }
+  </style>
 </head>
-<body data-business-id="{{ business.id }}" data-is-owner="{{ 'true' if is_owner else 'false' }}">
+<body data-business-id="{{ business.id }}" data-is-owner="{{ 'true' if is_owner else 'false' }}" data-latitude="{{ business.latitude or '' }}" data-longitude="{{ business.longitude or '' }}">
+
 <!-- NAVBAR -->
-<nav class="navbar navbar-expand-lg fixed-top">
+<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
   <div class="container">
     <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
       <i class="bi bi-chat-dots text-primary me-2"></i>Comuni IA
     </a>
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav ms-auto">
-        {% if not session.user_id %}
-        <li class="nav-item"><a href="{{ url_for('join') }}" class="btn btn-primary ms-2">Regístrate</a></li>
-        {% else %}
-        <li class="nav-item"><a href="{{ url_for('logout') }}" class="btn btn-outline-primary ms-2">Salir</a></li>
+    <div class="collapse navbar-collapse" id="navbarNavProfile">
+      <ul class="navbar-nav ms-auto align-items-lg-center">
+        <li class="nav-item"><a href="{{ url_for('home') }}" class="nav-link">Inicio</a></li>
+        {% if session.user_id %}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <i class="bi bi-person-circle me-1"></i> Perfil
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar Sesión</a></li>
+          </ul>
+        </li>
         {% endif %}
       </ul>
     </div>
   </div>
 </nav>
 
-<main class="container py-5 mt-5">
-  <div class="row g-4">
-    <!-- COLUMNA IZQUIERDA: DETALLES DEL NEGOCIO -->
-    <div class="col-md-4">
-      <div class="card shadow-sm rounded-4">
-        <div class="card-body text-center">
-          {% if business.logo %}
-          <img src="{{ url_for('static', filename='uploads/' + business.logo) }}" alt="{{ business.name }} Logo" class="img-fluid rounded-circle mb-3" style="max-height: 150px; object-fit: cover;">
-          {% else %}
-          <i class="bi bi-shop display-4 text-muted mb-3"></i>
-          {% endif %}
-          <h4 class="card-title">{{ business.name }}</h4>
-          <p class="text-muted">{{ business.category }}</p>
-          <p><i class="bi bi-geo-alt text-primary me-2"></i>{{ business.location }}</p>
-          {% if business.phone %}<p><i class="bi bi-telephone text-primary me-2"></i>{{ business.phone }}</p>{% endif %}
-          {% if business.whatsapp %}<p><i class="bi bi-whatsapp text-success me-2"></i>{{ business.whatsapp }}</p>{% endif %}
-          {% if business.email %}<p><i class="bi bi-envelope text-primary me-2"></i>{{ business.email }}</p>{% endif %}
-        </div>
-      </div>
-    </div>
+<!-- BANNER -->
+<div class="profile-banner"></div>
 
-    <!-- COLUMNA DERECHA: PRODUCTOS Y RESEÑAS -->
-    <div class="col-md-8">
-      <!-- SECCIÓN PRODUCTOS -->
-      <div class="card shadow-sm rounded-4 mb-4">
-        <div class="card-body">
-          <h5>Productos</h5>
-          {% if is_owner %}
-          <button class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addProductModal">
-            <i class="bi bi-plus-lg"></i> Agregar Producto
-          </button>
-          {% endif %}
-          <div id="products-list" class="row g-3">
-            {% for product in products %}
-            <div class="col-md-6">
-              <div class="card h-100">
-                <div class="card-body">
-                  {% if product.image_url %}
-                  <img src="{{ url_for('static', filename='uploads/' + product.image_url) }}" alt="{{ product.name }}" class="img-fluid mb-2" style="max-height: 100px; object-fit: cover;">
-                  {% else %}
-                  <i class="bi bi-image display-5 text-muted mb-2"></i>
-                  {% endif %}
-                  <h6 class="card-title">{{ product.name }}</h6>
-                  <p class="text-muted">Bs. {{ "%.2f"|format(product.price) }}</p>
-                  {% if is_owner %}
-                  <button class="btn btn-danger btn-sm delete-product" data-id="{{ product.id }}" onclick="deleteProduct(this)">
-                    <i class="bi bi-trash"></i> Eliminar
-                  </button>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-            {% else %}
-            <p id="no-products-msg" class="text-muted">No hay productos.</p>
-            {% endfor %}
-          </div>
+<!-- CONTENIDO -->
+<div class="container pb-5">
+  <div class="profile-header">
+    <div class="row">
+      <div class="col-md-3 text-center mb-3 position-relative">
+        {% if business.logo %}
+        <img src="{{ url_for('static', filename='uploads/' + business.logo) }}" class="profile-avatar mx-auto">
+        {% else %}
+        <div class="profile-avatar mx-auto d-flex align-items-center justify-content-center bg-light">
+          <i class="bi bi-shop display-4 text-muted"></i>
         </div>
+        {% endif %}
+        {% if is_owner %}
+        <button class="btn btn-sm btn-light position-absolute bottom-0 start-50 translate-middle-x mb-2" data-bs-toggle="modal" data-bs-target="#updateLogoModal" style="opacity: 0.8;">
+          <i class="bi bi-camera"></i> Cambiar
+        </button>
+        {% endif %}
       </div>
-
-      <!-- SECCIÓN RESEÑAS -->
-      <div class="card shadow-sm rounded-4">
-        <div class="card-body">
-          <h5>Reseñas <span class="badge bg-primary">{{ reviews|length }}</span></h5>
-          <p class="text-muted">Promedio: {{ avg_rating }}/5</p>
-          {% for review in reviews %}
-          <div class="card mb-2 shadow-sm">
-            <div class="card-body p-3">
-              <p class="mb-0"><strong>{{ review.author }}</strong> - {{ review.rating }}/5</p>
-              <small class="text-muted">{{ review.created_at }}</small>
-              <p class="mb-0">{{ review.comment }}</p>
-            </div>
+      <div class="col-md-9">
+        <div class="bg-white rounded-4 shadow-sm p-4">
+          <div class="d-flex justify-content-between align-items-start">
+            <h1 class="h3 fw-bold mb-2">{{ business.name }}</h1>
+            {% if is_owner %}
+            <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editBusinessModal">
+              <i class="bi bi-pencil-square"></i> Editar
+            </button>
+            {% endif %}
           </div>
-          {% else %}
-          <p class="text-muted">No hay reseñas.</p>
-          {% endfor %}
+          <p class="text-muted mb-2"><i class="bi bi-grid me-2"></i>{{ business.category }}</p>
+          <p class="mb-3">{{ business.description }}</p>
+          <div class="d-flex gap-2 flex-wrap mb-3">
+            <span class="badge bg-light text-dark border"><i class="bi bi-geo-alt text-primary me-1"></i> {{ business.location }}</span>
+            <span class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> {{ avg_rating if avg_rating > 0 else 'Nuevo' }}</span>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            {% if business.whatsapp %}
+            <a href="https://wa.me/{{ business.whatsapp }}" target="_blank" class="btn btn-success btn-sm">
+              <i class="bi bi-whatsapp"></i> WhatsApp
+            </a>
+            {% endif %}
+            {% if business.phone %}
+            <a href="tel:{{ business.phone }}" class="btn btn-primary btn-sm">
+              <i class="bi bi-telephone"></i> {{ business.phone }}
+            </a>
+            {% endif %}
+            {% if business.email %}
+            <a href="mailto:{{ business.email }}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-envelope"></i> Email
+            </a>
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>
   </div>
-</main>
+
+  <!-- STATS -->
+  <div class="row g-3 my-4">
+    <div class="col-md-3 col-6">
+      <div class="stats-box">
+        <i class="bi bi-eye display-6 text-primary"></i>
+        <h4 class="mt-2 mb-0">1.2K</h4>
+        <small class="text-muted">Visitas</small>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stats-box">
+        <i class="bi bi-bag display-6 text-success"></i>
+        <h4 class="mt-2 mb-0">{{ products|length }}</h4>
+        <small class="text-muted">Productos</small>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stats-box">
+        <i class="bi bi-star-fill display-6 text-warning"></i>
+        <h4 class="mt-2 mb-0">{{ avg_rating if avg_rating > 0 else 'N/A' }}</h4>
+        <small class="text-muted">Rating</small>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stats-box">
+        <i class="bi bi-chat-dots display-6 text-info"></i>
+        <h4 class="mt-2 mb-0">{{ reviews|length }}</h4>
+        <small class="text-muted">Reseñas</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCTOS -->
+  <section class="mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="section-title mb-0">Productos</h2>
+      {% if is_owner %}
+      <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addProductModal">
+        <i class="bi bi-plus-circle"></i> Agregar
+      </button>
+      {% endif %}
+    </div>
+    
+    <div id="products-list" class="row g-3">
+      {% if products %}
+        {% for product in products %}
+        <div class="col-lg-3 col-md-4 col-6">
+          <div class="card product-card-new h-100">
+            {% if product.image_url %}
+            <img src="{{ url_for('static', filename='uploads/' + product.image_url) }}" class="product-img-new">
+            {% else %}
+            <div class="product-img-new bg-light d-flex align-items-center justify-content-center">
+              <i class="bi bi-image display-4 text-muted"></i>
+            </div>
+            {% endif %}
+            <div class="card-body p-3">
+              <h6 class="fw-bold mb-2">{{ product.name }}</h6>
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="h6 text-primary mb-0">Bs. {{ "%.2f"|format(product.price) }}</span>
+                {% if is_owner %}
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(this)" data-id="{{ product.id }}">
+                  <i class="bi bi-trash"></i>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="col-12 text-center py-5">
+        <i class="bi bi-bag-x display-1 text-muted"></i>
+        <h5 class="mt-3">No hay productos</h5>
+        <p class="text-muted">{% if is_owner %}Agrega tu primer producto{% else %}Este negocio no tiene productos aún{% endif %}</p>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- RESEÑAS -->
+  <section>
+    <h2 class="section-title">Reseñas</h2>
+    <div class="row g-3">
+      {% if reviews %}
+        {% for review in reviews %}
+        <div class="col-md-6">
+          <div class="review-box">
+            <div class="d-flex justify-content-between mb-2">
+              <h6 class="fw-bold mb-0"><i class="bi bi-person-circle text-primary me-2"></i>{{ review.author }}</h6>
+              <small class="text-muted">{{ review.created_at }}</small>
+            </div>
+            <div class="text-warning mb-2">
+              {% for i in range(review.rating) %}<i class="bi bi-star-fill"></i>{% endfor %}
+              {% for i in range(5 - review.rating) %}<i class="bi bi-star"></i>{% endfor %}
+            </div>
+            <p class="text-muted mb-0">{{ review.comment }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="col-12 text-center py-5">
+        <i class="bi bi-star display-1 text-muted"></i>
+        <h5 class="mt-3">Sin reseñas</h5>
+        <p class="text-muted">Sé el primero en dejar una reseña</p>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+</div>
 
 <!-- MODAL AGREGAR PRODUCTO -->
+{% if is_owner %}
 <div class="modal fade" id="addProductModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
         <h5 class="modal-title">Agregar Producto</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body p-4">
         <form id="addProductForm">
           <div class="mb-3">
-            <label class="form-label">Nombre</label>
+            <label class="form-label fw-bold">Nombre</label>
             <input type="text" class="form-control" name="name" required>
           </div>
           <div class="mb-3">
-            <label class="form-label">Precio (Bs)</label>
+            <label class="form-label fw-bold">Precio (Bs.)</label>
             <input type="number" class="form-control" name="price" step="0.01" min="0" required>
           </div>
           <div class="mb-3">
-            <label class="form-label">Imagen</label>
+            <label class="form-label fw-bold">Imagen</label>
             <input type="file" class="form-control" name="image" accept="image/*">
-            <small class="text-muted">Opcional (JPG, PNG)</small>
           </div>
-          <button type="submit" class="btn btn-primary">Guardar</button>
+          <button type="submit" class="btn btn-primary w-100">Agregar</button>
         </form>
       </div>
     </div>
   </div>
 </div>
+{% endif %}
 
+<!-- MODAL ACTUALIZAR LOGO -->
+{% if is_owner %}
+<div class="modal fade" id="updateLogoModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Actualizar Logo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form id="updateLogoForm" method="POST" action="{{ url_for('update_logo', id=business.id) }}" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Selecciona la nueva imagen</label>
+            <input type="file" class="form-control" name="logo" accept="image/*" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Actualizar Logo</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- MODAL EDITAR NEGOCIO -->
+{% if is_owner %}
+<div class="modal fade" id="editBusinessModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Editar Información del Negocio</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form method="POST" action="{{ url_for('edit_business', id=business.id) }}">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Nombre del Negocio</label>
+            <input type="text" class="form-control" name="name" value="{{ business.name }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Descripción</label>
+            <textarea class="form-control" name="description" rows="5" required>{{ business.description }}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Categoría</label>
+            <select name="category" class="form-select" required>
+              {% set categories = ["Gastronomía", "Moda y Ropa", "Servicios Profesionales", "Belleza y Cuidado Personal", "Hogar y Decoración", "Tecnología", "Salud y Bienestar", "Educación", "Otros"] %}
+              {% for cat in categories %}
+              <option value="{{ cat }}" {% if business.category == cat %}selected{% endif %}>{{ cat }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <hr class="my-4">
+          <h6 class="mb-3">Información de Contacto (Opcional)</h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold"><i class="bi bi-telephone"></i> Teléfono</label>
+              <input type="tel" class="form-control" name="phone" value="{{ business.phone or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold"><i class="bi bi-whatsapp text-success"></i> WhatsApp</label>
+              <input type="tel" class="form-control" name="whatsapp" value="{{ business.whatsapp or '' }}" placeholder="591xxxxxxxx">
+            </div>
+            <div class="col-md-12">
+              <label class="form-label fw-bold"><i class="bi bi-envelope"></i> Email del Negocio</label>
+              <input type="email" class="form-control" name="business_email" value="{{ business.email or '' }}">
+            </div>
+          </div>
+          <hr class="my-4">
+          <h6 class="mb-3">Ubicación en el Mapa</h6>
+          <p class="text-muted small">Haz clic en el mapa para colocar o mover el marcador en la ubicación exacta de tu negocio.</p>
+          <div id="editMap" style="height: 300px; border-radius: 12px; z-index: 1056;"></div>
+          <input type="hidden" id="latitude" name="latitude" value="{{ business.latitude or '' }}">
+          <input type="hidden" id="longitude" name="longitude" value="{{ business.longitude or '' }}">
+          <button type="button" id="clearLocationBtn" class="btn btn-sm btn-outline-danger mt-2">
+            <i class="bi bi-x-circle"></i> Limpiar Ubicación
+          </button>
+
+          <button type="submit" class="btn btn-primary w-100 mt-4">Guardar Cambios</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  const addProductForm = document.getElementById('addProductForm');
-  const addProductModal = new bootstrap.Modal(document.getElementById('addProductModal'));
-  const productsList = document.getElementById('products-list');
-  const noProductsMsg = document.getElementById('no-products-msg');
   const businessId = document.body.dataset.businessId;
+  const isOwner = document.body.dataset.isOwner === 'true';
 
-  // --- AGREGAR PRODUCTO ---
-  addProductForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
+  // Solo inicializamos el formulario y el modal si el usuario es propietario
+  if (isOwner) {
+    const form = document.getElementById('addProductForm');
+    const modalEl = document.getElementById('addProductModal');
+    const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
 
-    try {
-      const resp = await fetch(`/api/products/${businessId}`, {
-        method: 'POST',
-        body: formData
-      });
-      const data = await resp.json();
-      if (data.success) {
-        addProductToDOM(data.product);
-        addProductForm.reset();
-        addProductModal.hide();
-        alert('Producto agregado con éxito.');
-      } else {
-        alert('Error: ' + (data.error || 'No se pudo agregar el producto.'));
-      }
-    } catch (err) {
-      alert('Error de conexión al agregar el producto.');
-    }
-  });
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
 
-  // --- ELIMINAR PRODUCTO ---
-  async function deleteProduct(button) {
-    const productId = button.dataset.id;
-    if (!confirm('¿Seguro que quieres eliminar este producto?')) return;
-
-    try {
-      const resp = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
-      const data = await resp.json();
-      if (data.success) {
-        // Eliminar el producto del DOM
-        const productCard = button.closest('.col-md-6');
-        productCard.remove();
-        if (productsList.children.length === 1 && productsList.children[0].id === 'no-products-msg') {
-             noProductsMsg.style.display = 'block';
+      try {
+        const resp = await fetch(`/api/products/${businessId}`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+        if (data.success) {
+          form.reset();
+          modal?.hide();
+          location.reload();
+        } else {
+          alert('Error: ' + (data.error || 'No se pudo agregar'));
         }
-        alert('Producto eliminado.');
+      } catch (err) {
+        alert('Error de conexión');
+      }
+    });
+  }
+
+  async function deleteProduct(btn) {
+    const id = btn.dataset.id;
+    if (!confirm('¿Eliminar este producto?')) return;
+
+    try {
+      const resp = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      const data = await resp.json();
+      if (data.success) {
+        btn.closest('.col-lg-3, .col-md-4, .col-6').remove();
+        if (document.getElementById('products-list').children.length === 0) {
+          location.reload();
+        }
       } else {
-        alert('Error: ' + (data.error || 'No se pudo eliminar.'));
+        alert('Error: ' + (data.error || 'No se pudo eliminar'));
       }
     } catch (err) {
-      alert('Error de conexión al eliminar.');
+      alert('Error de conexión');
     }
   }
 
-  // --- FUNCIÓN PARA AÑADIR PRODUCTO AL DOM ---
-  function addProductToDOM(product) {
-    if (noProductsMsg) {
-      noProductsMsg.style.display = 'none';
-    }
+  // --- MAPA LEAFLET ---
+  const lat = document.body.dataset.latitude ? parseFloat(document.body.dataset.latitude) : null;
+  const lon = document.body.dataset.longitude ? parseFloat(document.body.dataset.longitude) : null;
+  const defaultLat = -17.7833; // Santa Cruz
+  const defaultLon = -63.1833;
 
-    const imageUrl = product.image_url 
-      ? `/static/uploads/${product.image_url}` 
-      : '';
-
-    const productHTML = `
-      <div class="col-md-6">
-        <div class="card h-100">
-          <div class="card-body">
-            ${imageUrl 
-              ? `<img src="${imageUrl}" alt="${product.name}" class="img-fluid mb-2" style="max-height: 100px; object-fit: cover;">`
-              : `<i class="bi bi-image display-5 text-muted mb-2"></i>`
-            }
-            <h6 class="card-title">${product.name}</h6>
-            <p class="text-muted">Bs. ${parseFloat(product.price).toFixed(2)}</p>
-            <button class="btn btn-danger btn-sm delete-product" data-id="${product.id}" onclick="deleteProduct(this)">
-              <i class="bi bi-trash"></i> Eliminar
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-    productsList.insertAdjacentHTML('beforeend', productHTML);
+  // Mapa en el perfil (solo visualización)
+  if (lat && lon) {
+    const map = L.map('map').setView([lat, lon], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+    L.marker([lat, lon]).addTo(map)
+      .bindPopup('<b>{{ business.name }}</b><br>Ubicación exacta.').openPopup();
   }
 
-  // Asignar el evento a los botones ya existentes
-  document.querySelectorAll('.delete-product').forEach(btn => btn.onclick = () => deleteProduct(btn));
+  // Mapa en el modal de edición (interactivo)
+  const editBusinessModal = document.getElementById('editBusinessModal');
+  editBusinessModal?.addEventListener('shown.bs.modal', () => {
+    const editMap = L.map('editMap').setView([lat || defaultLat, lon || defaultLon], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(editMap);
+
+    let marker;
+    const latInput = document.getElementById('latitude');
+    const lonInput = document.getElementById('longitude');
+
+    if (lat && lon) {
+      marker = L.marker([lat, lon], { draggable: true }).addTo(editMap);
+    }
+
+    editMap.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      if (marker) {
+        marker.setLatLng(e.latlng);
+      } else {
+        marker = L.marker(e.latlng, { draggable: true }).addTo(editMap);
+      }
+      latInput.value = lat;
+      lonInput.value = lng;
+
+      marker.on('dragend', (event) => {
+        const position = marker.getLatLng();
+        latInput.value = position.lat;
+        lonInput.value = position.lng;
+      });
+    });
+
+    if (marker) {
+      marker.on('dragend', (event) => {
+        const position = marker.getLatLng();
+        latInput.value = position.lat;
+        lonInput.value = position.lng;
+      });
+    }
+
+    document.getElementById('clearLocationBtn').addEventListener('click', () => {
+      if (marker) editMap.removeLayer(marker);
+      latInput.value = '';
+      lonInput.value = '';
+    });
+  });
 </script>
 </body>
 </html>

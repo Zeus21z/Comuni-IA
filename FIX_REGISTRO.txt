@@ -1,0 +1,66 @@
+# FIX para la función join - Reemplazar en app.py
+
+# Encontrar esta sección:
+```
+        try:
+            # Transacción: crear user y business juntos
+            with db.session.begin():
+                user = User(email=email, role='user')
+                user.set_password(password)
+                db.session.add(user)
+                db.session.flush()
+
+                business = Business(name=name, description=description, logo=logo_path,
+                                    location=location, category=category, phone=phone,
+                                    email=business_email, whatsapp=whatsapp)
+                db.session.add(business)
+                db.session.flush()
+
+                user.business_id = business.id
+
+            session['user_id'] = user.id
+            session['user_email'] = user.email
+            session['user_role'] = user.role
+
+            return redirect(url_for('profile', id=business.id))
+        except Exception as e:
+            db.session.rollback()
+            return render_template('join.html', error=f"Error al registrar: {str(e)}", form=request.form, categories=categories)
+```
+
+# Y reemplazarla por:
+```
+        try:
+            # Crear usuario
+            user = User(email=email, role='user')
+            user.set_password(password)
+            db.session.add(user)
+            db.session.flush()  # Obtener user.id
+
+            # Crear negocio
+            business = Business(name=name, description=description, logo=logo_path,
+                              location=location, category=category, phone=phone,
+                              email=business_email, whatsapp=whatsapp)
+            db.session.add(business)
+            db.session.flush()  # Obtener business.id
+
+            # Vincular
+            user.business_id = business.id
+            
+            # IMPORTANTE: Commit manual
+            db.session.commit()
+
+            # Iniciar sesión
+            session['user_id'] = user.id
+            session['user_email'] = user.email
+            session['user_role'] = user.role
+
+            return redirect(url_for('profile', id=business.id))
+        except Exception as e:
+            db.session.rollback()
+            return render_template('join.html', error=f"Error al registrar: {str(e)}", 
+                                 form=request.form, categories=categories)
+```
+
+PROBLEMA: El `with db.session.begin()` NO hace commit automático en SQLAlchemy 2.x
+SOLUCIÓN: Usar flush() y commit() manual

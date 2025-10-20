@@ -2,6 +2,7 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from sqlalchemy import text
 from dotenv import load_dotenv
 import google.generativeai as genai
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -38,6 +39,8 @@ class Business(db.Model):
     location = db.Column(db.String(160), nullable=False, default="Santa Cruz, Bolivia")
     category = db.Column(db.String(100), nullable=False, default="Servicios")
     phone = db.Column(db.String(20), nullable=True)
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
     email = db.Column(db.String(120), nullable=True)
     whatsapp = db.Column(db.String(20), nullable=True)
     reviews = db.relationship('Review', backref='business', lazy=True, cascade="all, delete-orphan")
@@ -86,6 +89,19 @@ class User(db.Model):
 
 with app.app_context():
     db.create_all()
+    # En bases existentes la tabla 'businesses' puede no tener columnas new (latitude/longitude).
+    # Comprobamos y añadimos columnas faltantes con ALTER TABLE (SQLite soporta ADD COLUMN simple).
+    try:
+        tbl_info = db.session.execute(text("PRAGMA table_info(businesses) ")).fetchall()
+        existing_cols = [row[1] for row in tbl_info]
+        if 'latitude' not in existing_cols:
+            db.session.execute(text("ALTER TABLE businesses ADD COLUMN latitude REAL"))
+        if 'longitude' not in existing_cols:
+            db.session.execute(text("ALTER TABLE businesses ADD COLUMN longitude REAL"))
+        db.session.commit()
+    except Exception as e:
+        # No detener el arranque si falla esta corrección automática; informar en consola.
+        print('Advertencia: no se pudo asegurar columnas latitude/longitude en businesses:', e)
 
 # DECORADORES
 def login_required(f):
@@ -186,51 +202,57 @@ def join():
         phone = request.form.get('phone', '').strip()
         business_email = request.form.get('business_email', '').strip()
         whatsapp = request.form.get('whatsapp', '').strip()
-
-        # Manejo de imagen (logo)
-        logo = request.files.get('logo') if 'logo' in request.files else None
-        logo_path = None
-        if logo and logo.filename:
-            try:
-                logo_path = images.save(logo)
-            except Exception as e:
-                return render_template('join.html', error=f"Error al subir logo: {str(e)}", form=request.form, categories=categories)
+        latitude = request.form.get('latitude')
+        longitude = request.form.get('longitude')
 
         # Validaciones user
         if not email or not password or not confirm_password:
             return render_template('join.html', error="Campos de cuenta son requeridos", form=request.form, categories=categories)
-        
+
         if password != confirm_password:
             return render_template('join.html', error="Contraseñas no coinciden", form=request.form, categories=categories)
-        
+
         if len(password) < 6:
             return render_template('join.html', error="Contraseña debe tener al menos 6 caracteres", form=request.form, categories=categories)
-        
+
         existing_user = User.query.filter_by(email=email).first()
         if existing_user:
             return render_template('join.html', error="Email ya registrado", form=request.form, categories=categories)
-        
+
         # Validaciones business
         if not name or not description:
             return render_template('join.html', error="Nombre y descripción del negocio son obligatorios", form=request.form, categories=categories)
 
         try:
-            # Transacción: crear user y business juntos
-            with db.session.begin():
-                user = User(email=email, role='user')
-                user.set_password(password)
-                db.session.add(user)
-                db.session.flush()
+            # 1. Manejo de imagen (logo) dentro del try
+            logo = request.files.get('logo') if 'logo' in request.files else None
+            logo_path = None
+            if logo and logo.filename:
+                logo_path = images.save(logo)
 
-                business = Business(name=name, description=description, logo=logo_path,
-                                    location=location, category=category, phone=phone,
-                                    email=business_email, whatsapp=whatsapp)
-                db.session.add(business)
-                db.session.flush()
+            # 2. Crear usuario y negocio en una transacción
+            user = User(email=email, role='user')
+            user.set_password(password)
+            db.session.add(user)
 
-                user.business_id = business.id
-                db.session.commit()
+            business = Business(name=name, description=description, logo=logo_path,
+                              location=location, category=category, phone=phone,
+                              email=business_email, whatsapp=whatsapp,
+                              latitude=float(latitude) if latitude else None,
+                              longitude=float(longitude) if longitude else None)
+            db.session.add(business)
 
+            # Es importante hacer flush() para que SQLAlchemy asigne los IDs
+            # antes de vincularlos.
+            db.session.flush()
+
+            # 3. Vincular usuario con negocio
+            user.business_id = business.id
+
+            # 4. Confirmar la transacción completa
+            db.session.commit()
+
+            # Iniciar sesión
             session['user_id'] = user.id
             session['user_email'] = user.email
             session['user_role'] = user.role
@@ -238,7 +260,8 @@ def join():
             return redirect(url_for('profile', id=business.id))
         except Exception as e:
             db.session.rollback()
-            return render_template('join.html', error=f"Error al registrar: {str(e)}", form=request.form, categories=categories)
+            return render_template('join.html', error=f"Error al registrar: {str(e)}",
+                                 form=request.form, categories=categories)
 
     return render_template('join.html', categories=categories)
 
@@ -279,7 +302,7 @@ def register():
 def profile(id):
     business = Business.query.get_or_404(id)
     products = Product.query.filter_by(business_id=id).all()
-    reviews = Review.query.filter_by(business_id=id).order_by(Review.created_at.desc()).all()
+    reviews_query = Review.query.filter_by(business_id=id).order_by(Review.created_at.desc()).all()
     
     avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(business_id=id).scalar() or 0
     
@@ -289,9 +312,62 @@ def profile(id):
         if user and user.business_id == id:
             is_owner = True
     
-    return render_template('profile.html', business=business, products=products, 
-                         reviews=reviews, avg_rating=round(avg_rating, 1),
+    return render_template('profile.html', business=business, products=products,
+                         reviews=[r.to_dict() for r in reviews_query],
+                         avg_rating=round(avg_rating, 1),
                          is_owner=is_owner)
+
+@app.route('/profile/<int:id>/update_logo', methods=['POST'], strict_slashes=False)
+@owner_required
+def update_logo(id):
+    business = Business.query.get_or_404(id)
+    logo = request.files.get('logo')
+
+    if not logo or not logo.filename:
+        return redirect(url_for('profile', id=id))
+
+    try:
+        # Borrar logo antiguo si existe
+        if business.logo:
+            old_logo_path = images.path(business.logo)
+            if os.path.exists(old_logo_path):
+                os.remove(old_logo_path)
+        
+        business.logo = images.save(logo)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+    return redirect(url_for('profile', id=id))
+
+@app.route('/profile/<int:id>/edit', methods=['POST'], strict_slashes=False)
+@owner_required
+def edit_business(id):
+    business = Business.query.get_or_404(id)
+    
+    # Obtener datos del formulario
+    name = request.form.get('name', '').strip()
+    description = request.form.get('description', '').strip()
+    category = request.form.get('category', '').strip()
+    phone = request.form.get('phone', '').strip()
+    business_email = request.form.get('business_email', '').strip()
+    whatsapp = request.form.get('whatsapp', '').strip()
+    latitude = request.form.get('latitude')
+    longitude = request.form.get('longitude')
+
+    if not name or not description or not category:
+        # Aquí podrías usar `flash` para un mejor feedback, pero por ahora redirigimos.
+        return redirect(url_for('profile', id=id))
+
+    business.name = name
+    business.description = description
+    business.category = category
+    business.phone = phone
+    business.email = business_email
+    business.whatsapp = whatsapp
+    business.latitude = float(latitude) if latitude else None
+    business.longitude = float(longitude) if longitude else None
+    db.session.commit()
+    return redirect(url_for('profile', id=id))
 
 @app.route('/api/ai/suggestions/<int:id>', methods=['GET'], strict_slashes=False)
 def ai_suggestions(id):
@@ -381,7 +457,7 @@ def delete_product(product_id):
             db.session.commit()
             return jsonify({"success": True})
     
-    return jsonify({"error": "No autorizado"}), 403
+    abort(403) # abort() es manejado por el errorhandler y devuelve JSON
 
 # RUTAS DE RESEÑAS (SIN CAMBIOS)
 @app.route('/api/reviews/<int:business_id>', methods=['POST'], strict_slashes=False)
@@ -442,7 +518,11 @@ def not_found(e):
 
 @app.errorhandler(500)
 def server_error(e):
-    return jsonify({"error": "Error interno del servidor"}), 500
+    return jsonify(error=str(e)), 500
+
+@app.errorhandler(403)
+def forbidden(e):
+    return jsonify(error="No tienes permiso para realizar esta acción"), 403
 
 if __name__ == '__main__':
     app.run(debug=True)
