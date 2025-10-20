@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Admin Dashboard — Comuni IA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+</head>
+<body>
+<!-- NAVBAR (SIMILAR A INDEX) -->
+<nav class="navbar navbar-expand-lg fixed-top">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
+      <i class="bi bi-chat-dots text-primary me-2"></i>Comuni IA - Admin
+    </a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a href="{{ url_for('logout') }}" class="btn btn-outline-primary ms-2">Salir</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<main class="container py-5 mt-5">
+  <h2 class="mb-4">Dashboard Admin: Gestión de Negocios</h2>
+  <div class="row g-4">
+    {% for b in businesses %}
+    <div class="col-md-6">
+      <div class="card shadow-sm rounded-4">
+        <div class="card-body">
+          <h5>{{ b.name }} (ID: {{ b.id }})</h5>
+          <p class="text-muted">{{ b.description[:100] }}...</p>
+          <button class="btn btn-danger btn-sm delete-business" data-id="{{ b.id }}">
+            <i class="bi bi-trash"></i> Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5">
+      <p>No hay negocios.</p>
+    </div>
+    {% endfor %}
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Eliminar con confirmación
+document.querySelectorAll('.delete-business').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const id = e.target.dataset.id;
+    if (!confirm(`¿Seguro que quieres eliminar el negocio ID ${id}? Esto es irreversible.`)) return;
+    
+    try {
+      const resp = await fetch(`/admin/delete_business/${id}`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.success) {
+        alert('Negocio eliminado.');
+        location.reload();
+      } else {
+        alert('Error: ' + data.error);
+      }
+    } catch (e) {
+      alert('Error de conexión.');
+    }
+  });
+});
+</script>
+</body>
+</html>

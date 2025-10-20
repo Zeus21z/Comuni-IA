@@ -1,9 +1,10 @@
 """
-Script de migración completa - Fases C, D, E
+Script de migración completa - Fases C, D, E + Mejoras Admin
 Ejecutar con: python migrate_complete.py
 """
 import sqlite3
 import os
+from werkzeug.security import generate_password_hash  # Import para hash
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'comuni_ia.db')
 
@@ -37,12 +38,35 @@ def migrate():
         """)
         print("✅ Tabla 'users' creada/verificada")
         
+        # 3. NUEVO: Agregar columna role a users si no existe
+        cursor.execute("PRAGMA table_info(users)")
+        user_columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'role' not in user_columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user'")
+            print("✅ Columna 'role' agregada a users")
+        else:
+            print("ℹ️  Columna 'role' ya existe en users")
+        
+        # 4. NUEVO: Crear usuario admin inicial si no existe
+        cursor.execute("SELECT * FROM users WHERE email = 'admin@comunia.com'")
+        if not cursor.fetchone():
+            admin_pass_hash = generate_password_hash('admin123')  # Cambia esta contraseña después
+            cursor.execute("""
+                INSERT INTO users (email, password_hash, role)
+                VALUES ('admin@comunia.com', ?, 'admin')
+            """, (admin_pass_hash,))
+            print("✅ Usuario admin creado (email: admin@comunia.com, pass: admin123 - ¡Cámbiala!)")
+        else:
+            print("ℹ️  Usuario admin ya existe")
+        
         conn.commit()
         print("\n🎉 Migración completada exitosamente!")
         print("\n📋 Resumen:")
-        print("   - Tabla users: Lista para autenticación")
+        print("   - Tabla users: Lista para autenticación con roles")
         print("   - Reviews: Ahora con timestamps")
-        print("   - Todas las fases (A, B, C, D, E) están activas")
+        print("   - Admin inicial: Creado si no existía")
+        print("   - Todas las fases (A, B, C, D, E + Admin) están activas")
         
     except Exception as e:
         print(f"❌ Error durante la migración: {e}")

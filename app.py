@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from flask_uploads import UploadSet, configure_uploads, IMAGES
 
 load_dotenv()
 
@@ -17,17 +18,23 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{DB_PATH}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JSON_AS_ASCII'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'comunia-secret-key-2025')
+app.config['UPLOADED_IMAGES_DEST'] = os.path.join(BASEDIR, 'static', 'uploads')
+app.config['UPLOADED_IMAGES_ALLOW'] = IMAGES  # Solo imágenes (jpg, png, etc.)
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-# MODELOS (IGUALES - PERFECTOS)
+# CONFIGURACIÓN DE SUBIDAS
+images = UploadSet('images', IMAGES)
+configure_uploads(app, images)
+
+# MODELOS (ACTUALIZADO: logo y image_url ahora guardan rutas relativas)
 class Business(db.Model):
     __tablename__ = 'businesses'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(160), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    logo = db.Column(db.String(500), nullable=True)
+    logo = db.Column(db.String(500), nullable=True)  # Ruta relativa a static/uploads
     location = db.Column(db.String(160), nullable=False, default="Santa Cruz, Bolivia")
     category = db.Column(db.String(100), nullable=False, default="Servicios")
     phone = db.Column(db.String(20), nullable=True)
@@ -60,7 +67,7 @@ class Product(db.Model):
     business_id = db.Column(db.Integer, db.ForeignKey('businesses.id'), nullable=False)
     name = db.Column(db.String(160), nullable=False)
     price = db.Column(db.Float, nullable=False)
-    image_url = db.Column(db.String(500), nullable=True)
+    image_url = db.Column(db.String(500), nullable=True)  # Ruta relativa a static/uploads
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -68,6 +75,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     business_id = db.Column(db.Integer, db.ForeignKey('businesses.id'), nullable=True)
+    role = db.Column(db.String(20), default='user')
     created_at = db.Column(db.DateTime, default=db.func.now())
     
     def set_password(self, password):
@@ -79,7 +87,7 @@ class User(db.Model):
 with app.app_context():
     db.create_all()
 
-# DECORADOR PARA RUTAS PROTEGIDAS
+# DECORADORES
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -90,16 +98,28 @@ def login_required(f):
 
 def owner_required(f):
     @wraps(f)
-    def decorated_function(id, *args, **kwargs):
+    def decorated_function(*args, **kwargs):
+        business_id = kwargs.get('id') or kwargs.get('business_id')
         if 'user_id' not in session:
             return redirect(url_for('login'))
         user = User.query.get(session['user_id'])
-        if not user or user.business_id != id:
+        if not user or not business_id or user.business_id != business_id:
             abort(403)
-        return f(id, *args, **kwargs)
+        return f(*args, **kwargs)
     return decorated_function
 
-# GEMINI (MEJORADO)
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'admin':
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
+
+# GEMINI (SIN CAMBIOS)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -107,7 +127,7 @@ if GEMINI_API_KEY:
 else:
     GEMINI_MODEL = None
 
-# RUTAS DE AUTENTICACIÓN
+# RUTAS DE AUTENTICACIÓN (ACTUALIZADO: /join con subida de logo)
 @app.route('/login', methods=['GET', 'POST'], strict_slashes=False)
 def login():
     if request.method == 'POST':
@@ -122,10 +142,13 @@ def login():
         if user and user.check_password(password):
             session['user_id'] = user.id
             session['user_email'] = user.email
+            session['user_role'] = user.role
             
             next_page = request.args.get('next')
             if next_page:
                 return redirect(next_page)
+            elif user.role == 'admin':
+                return redirect(url_for('admin_dashboard'))
             elif user.business_id:
                 return redirect(url_for('profile', id=user.business_id))
             else:
@@ -140,49 +163,92 @@ def logout():
     session.clear()
     return redirect(url_for('home'))
 
-@app.route('/signup', methods=['GET', 'POST'], strict_slashes=False)
-def signup():
+@app.route('/join', methods=['GET', 'POST'], strict_slashes=False)
+def join():
+    categories = ["Gastronomía", "Moda y Ropa", "Servicios Profesionales", 
+                  "Belleza y Cuidado Personal", "Hogar y Decoración", 
+                  "Tecnología", "Salud y Bienestar", "Educación", "Otros"]
+    
+    if 'user_id' in session:
+        return redirect(url_for('home'))
+
     if request.method == 'POST':
+        # Datos de user
         email = request.form.get('email', '').strip()
         password = request.form.get('password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
         
-        if not email or not password:
-            return render_template('signup.html', error="Todos los campos son requeridos")
+        # Datos de business
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        location = request.form.get('location', 'Santa Cruz, Bolivia').strip() or "Santa Cruz, Bolivia"
+        category = request.form.get('category', 'Otros').strip()
+        phone = request.form.get('phone', '').strip()
+        business_email = request.form.get('business_email', '').strip()
+        whatsapp = request.form.get('whatsapp', '').strip()
+
+        # Manejo de imagen (logo)
+        logo = request.files.get('logo') if 'logo' in request.files else None
+        logo_path = None
+        if logo and logo.filename:
+            try:
+                logo_path = images.save(logo)
+            except Exception as e:
+                return render_template('join.html', error=f"Error al subir logo: {str(e)}", form=request.form, categories=categories)
+
+        # Validaciones user
+        if not email or not password or not confirm_password:
+            return render_template('join.html', error="Campos de cuenta son requeridos", form=request.form, categories=categories)
         
         if password != confirm_password:
-            return render_template('signup.html', error="Las contraseñas no coinciden")
+            return render_template('join.html', error="Contraseñas no coinciden", form=request.form, categories=categories)
         
         if len(password) < 6:
-            return render_template('signup.html', error="La contraseña debe tener al menos 6 caracteres")
+            return render_template('join.html', error="Contraseña debe tener al menos 6 caracteres", form=request.form, categories=categories)
         
         existing_user = User.query.filter_by(email=email).first()
         if existing_user:
-            return render_template('signup.html', error="Este email ya está registrado")
+            return render_template('join.html', error="Email ya registrado", form=request.form, categories=categories)
         
-        user = User(email=email)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-        
-        session['user_id'] = user.id
-        session['user_email'] = user.email
-        
-        return redirect(url_for('register'))
-    
-    return render_template('signup.html')
+        # Validaciones business
+        if not name or not description:
+            return render_template('join.html', error="Nombre y descripción del negocio son obligatorios", form=request.form, categories=categories)
 
-# RUTAS (IGUALES - FUNCIONALES)
+        try:
+            # Transacción: crear user y business juntos
+            with db.session.begin():
+                user = User(email=email, role='user')
+                user.set_password(password)
+                db.session.add(user)
+                db.session.flush()
+
+                business = Business(name=name, description=description, logo=logo_path,
+                                    location=location, category=category, phone=phone,
+                                    email=business_email, whatsapp=whatsapp)
+                db.session.add(business)
+                db.session.flush()
+
+                user.business_id = business.id
+                db.session.commit()
+
+            session['user_id'] = user.id
+            session['user_email'] = user.email
+            session['user_role'] = user.role
+
+            return redirect(url_for('profile', id=business.id))
+        except Exception as e:
+            db.session.rollback()
+            return render_template('join.html', error=f"Error al registrar: {str(e)}", form=request.form, categories=categories)
+
+    return render_template('join.html', categories=categories)
+
 @app.route('/', strict_slashes=False)
 def home():
-    # Obtener parámetros de búsqueda
     search_query = request.args.get('search', '').strip()
     category_filter = request.args.get('category', '').strip()
     
-    # Query base
     query = Business.query
     
-    # Aplicar filtros
     if search_query:
         query = query.filter(
             db.or_(
@@ -196,7 +262,6 @@ def home():
     
     businesses = query.order_by(Business.id.desc()).all()
     
-    # Lista de categorías para el filtro
     categories = ["Gastronomía", "Moda y Ropa", "Servicios Profesionales", 
                   "Belleza y Cuidado Personal", "Hogar y Decoración", 
                   "Tecnología", "Salud y Bienestar", "Educación", "Otros"]
@@ -208,40 +273,7 @@ def home():
 
 @app.route('/register', methods=['GET', 'POST'], strict_slashes=False)
 def register():
-    categories = ["Gastronomía", "Moda y Ropa", "Servicios Profesionales", 
-                  "Belleza y Cuidado Personal", "Hogar y Decoración", 
-                  "Tecnología", "Salud y Bienestar", "Educación", "Otros"]
-    
-    if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        description = request.form.get('description', '').strip()
-        logo = request.form.get('logo', '').strip()
-        location = request.form.get('location', 'Santa Cruz, Bolivia').strip() or "Santa Cruz, Bolivia"
-        category = request.form.get('category', 'Otros').strip()
-        phone = request.form.get('phone', '').strip()
-        email = request.form.get('email', '').strip()
-        whatsapp = request.form.get('whatsapp', '').strip()
-
-        if not name or not description:
-            return render_template('register.html', error="Nombre y descripción son obligatorios.", 
-                                 form=request.form, categories=categories)
-
-        business = Business(name=name, description=description, logo=logo, 
-                          location=location, category=category, phone=phone,
-                          email=email, whatsapp=whatsapp)
-        db.session.add(business)
-        db.session.commit()
-        
-        # Vincular con usuario si está logueado
-        if 'user_id' in session:
-            user = User.query.get(session['user_id'])
-            if user and not user.business_id:
-                user.business_id = business.id
-                db.session.commit()
-        
-        return redirect(url_for('profile', id=business.id))
-
-    return render_template('register.html', categories=categories)
+    return redirect(url_for('join'))
 
 @app.route('/profile/<int:id>', strict_slashes=False)
 def profile(id):
@@ -249,10 +281,8 @@ def profile(id):
     products = Product.query.filter_by(business_id=id).all()
     reviews = Review.query.filter_by(business_id=id).order_by(Review.created_at.desc()).all()
     
-    # Calcular promedio de rating
     avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(business_id=id).scalar() or 0
     
-    # Verificar si el usuario actual es el dueño
     is_owner = False
     if 'user_id' in session:
         user = User.query.get(session['user_id'])
@@ -306,21 +336,27 @@ def chat():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# RUTAS DE PRODUCTOS
+# RUTAS DE PRODUCTOS (ACTUALIZADO: subida de imagen)
 @app.route('/api/products/<int:business_id>', methods=['POST'], strict_slashes=False)
 @owner_required
 def add_product(business_id):
     business = Business.query.get_or_404(business_id)
-    data = request.get_json(silent=True) or {}
+    image = request.files.get('image') if 'image' in request.files else None
     
-    name = data.get('name', '').strip()
-    price = data.get('price', 0)
-    image_url = data.get('image_url', '').strip()
+    name = request.form.get('name', '').strip()
+    price = float(request.form.get('price', 0))
+    image_path = None
+    
+    if image and image.filename:
+        try:
+            image_path = images.save(image)
+        except Exception as e:
+            return jsonify({"error": f"Error al subir imagen: {str(e)}"}), 500
     
     if not name or price <= 0:
         return jsonify({"error": "Nombre y precio válido son requeridos"}), 400
     
-    product = Product(business_id=business_id, name=name, price=price, image_url=image_url)
+    product = Product(business_id=business_id, name=name, price=price, image_url=image_path)
     db.session.add(product)
     db.session.commit()
     
@@ -338,7 +374,6 @@ def add_product(business_id):
 def delete_product(product_id):
     product = Product.query.get_or_404(product_id)
     
-    # Verificar que el usuario sea dueño
     if 'user_id' in session:
         user = User.query.get(session['user_id'])
         if user and user.business_id == product.business_id:
@@ -348,7 +383,7 @@ def delete_product(product_id):
     
     return jsonify({"error": "No autorizado"}), 403
 
-# RUTAS DE RESEÑAS
+# RUTAS DE RESEÑAS (SIN CAMBIOS)
 @app.route('/api/reviews/<int:business_id>', methods=['POST'], strict_slashes=False)
 def add_review(business_id):
     business = Business.query.get_or_404(business_id)
@@ -377,6 +412,29 @@ def get_reviews(business_id):
         "avg_rating": round(avg_rating, 1),
         "total": len(reviews)
     })
+
+# RUTAS ADMIN (SIN CAMBIOS)
+@app.route('/admin/dashboard', strict_slashes=False)
+@admin_required
+def admin_dashboard():
+    businesses = Business.query.all()
+    return render_template('admin_dashboard.html', businesses=businesses)
+
+@app.route('/admin/delete_business/<int:id>', methods=['POST'], strict_slashes=False)
+@admin_required
+def delete_business(id):
+    business = Business.query.get_or_404(id)
+    user = User.query.filter_by(business_id=id).first()
+    
+    try:
+        if user:
+            db.session.delete(user)
+        db.session.delete(business)
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(404)
 def not_found(e):
