@@ -398,15 +398,54 @@ def chat():
     if not user_msg:
         return jsonify({"error": "Falta 'message'"}), 400
 
-    system_context = (
-        "Eres el chatbot de Comuni IA. Responde con mensajes útiles y breves sobre marketing, visibilidad, "
-        "buenas prácticas de perfil, uso de etiquetas locales (#SantaCruzBolivia, #EmprendimientoCruceño), "
-        "participación en ferias locales (ex. Feria Barrio, Cambódromo), y cómo usar la plataforma Comuni IA. "
-        "Evita temas fuera de este alcance."
+    # --- INICIO DE LA MODIFICACIÓN (MEJORADA) ---
+    
+    # 1. Limpiar y normalizar el mensaje del usuario para una mejor búsqueda.
+    #    - Convertir a minúsculas.
+    #    - Eliminar signos de puntuación comunes.
+    #    - Reemplazar vocales con acentos por vocales sin acento.
+    import re
+    import unicodedata
+    
+    cleaned_msg = user_msg.lower()
+    cleaned_msg = re.sub(r'[^\w\s]', '', cleaned_msg) # Elimina puntuación
+    cleaned_msg = ''.join(c for c in unicodedata.normalize('NFD', cleaned_msg) if unicodedata.category(c) != 'Mn')
+
+    # 2. Buscar negocios relevantes usando las palabras limpias.
+    search_terms = cleaned_msg.split()
+    filters = [
+        db.or_(
+            Business.name.ilike(f'%{term}%'),
+            Business.description.ilike(f'%{term}%'),
+            Business.category.ilike(f'%{term}%')
+        ) for term in search_terms if len(term) > 2 # Ignorar palabras cortas
+    ]
+    
+    relevant_businesses = []
+    if filters:
+        # Usamos .limit(5) para no sobrecargar el prompt con demasiados negocios.
+        found_businesses = Business.query.filter(db.and_(*filters)).limit(5).all()
+        for b in found_businesses:
+            relevant_businesses.append(f"- Nombre: {b.name}, Categoría: {b.category}, Descripción: {b.description[:150]}...")
+
+    # 3. Construir un prompt dinámico para la IA.
+    #    Ahora la IA tendrá el contexto de los negocios que encontraste.
+    business_context_str = "\n".join(relevant_businesses) if relevant_businesses else "No se encontraron negocios relevantes en el directorio."
+
+    final_prompt = (
+        "Eres un asistente virtual para 'Comuni IA', un directorio de negocios locales en Santa Cruz, Bolivia. "
+        "Tu objetivo es ayudar a los usuarios a encontrar el negocio que necesitan. "
+        "Basado en la pregunta del usuario y la lista de negocios que te proporciono, recomienda la mejor opción y explica por qué. "
+        "Si ningún negocio parece adecuado, informa al usuario que no encontraste una coincidencia y anímale a explorar el directorio manualmente.\n\n"
+        f"LISTA DE NEGOCIOS ENCONTRADOS:\n{business_context_str}\n\n"
+        f"PREGUNTA DEL USUARIO:\n'{user_msg}'\n\n"
+        "Asistente:"
     )
+    # --- FIN DE LA MODIFICACIÓN (MEJORADA) ---
 
     try:
-        resp = GEMINI_MODEL.generate_content(f"{system_context}\n\nUsuario: {user_msg}\nAsistente:")
+        # Usamos el nuevo prompt dinámico
+        resp = GEMINI_MODEL.generate_content(final_prompt)
         text = resp.text.strip() if hasattr(resp, "text") else "No tengo una respuesta en este momento."
         return jsonify({"reply": text})
     except Exception as e:

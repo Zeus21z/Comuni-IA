@@ -1,0 +1,16 @@
+================================================================================
+CREDENCIALES DE ACCESO - COMUNI IA
+================================================================================
+
+Total de Negocios: 18 (2 por categoría)
+Fecha de Creación: 20/10/2025 19:18
+
+================================================================================
+
+================================================================================
+NOTAS:
+- Todas las contraseñas son simples para propósitos de testing
+- Los productos NO tienen imágenes (puedes agregarlas después)
+- Cada negocio tiene entre 4-5 productos específicos
+- Para cambiar contraseñas, hazlo desde el panel de admin
+================================================================================
