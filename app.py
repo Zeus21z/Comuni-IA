@@ -1,6 +1,7 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate
 from sqlalchemy import text
 from dotenv import load_dotenv
@@ -21,6 +22,7 @@ app.config['JSON_AS_ASCII'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'comunia-secret-key-2025')
 app.config['UPLOADED_IMAGES_DEST'] = os.path.join(BASEDIR, 'static', 'uploads')
 app.config['UPLOADED_IMAGES_ALLOW'] = IMAGES  # Solo imágenes (jpg, png, etc.)
+csrf = CSRFProtect(app)
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -28,6 +30,18 @@ migrate = Migrate(app, db)
 # CONFIGURACIÓN DE SUBIDAS
 images = UploadSet('images', IMAGES)
 configure_uploads(app, images)
+
+# Helper table for the many-to-many relationship between users and favorite businesses
+favorites = db.Table('favorites',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('business_id', db.Integer, db.ForeignKey('businesses.id'), primary_key=True)
+)
+
+# Helper table for the many-to-many relationship for business views
+business_views = db.Table('business_views',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('business_id', db.Integer, db.ForeignKey('businesses.id'), primary_key=True)
+)
 
 # MODELOS (ACTUALIZADO: logo y image_url ahora guardan rutas relativas)
 class Business(db.Model):
@@ -45,6 +59,8 @@ class Business(db.Model):
     whatsapp = db.Column(db.String(20), nullable=True)
     reviews = db.relationship('Review', backref='business', lazy=True, cascade="all, delete-orphan")
     products = db.relationship('Product', backref='business', lazy=True, cascade="all, delete-orphan")
+    favorited_by = db.relationship('User', secondary=favorites, lazy='subquery', backref=db.backref('favorite_businesses', lazy=True))
+    viewed_by = db.relationship('User', secondary=business_views, lazy='subquery', backref=db.backref('viewed_businesses', lazy=True))
 
 class Review(db.Model):
     __tablename__ = 'reviews'
@@ -69,6 +85,7 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     business_id = db.Column(db.Integer, db.ForeignKey('businesses.id'), nullable=False)
     name = db.Column(db.String(160), nullable=False)
+    description = db.Column(db.Text, nullable=True)  # Descripción detallada del producto
     price = db.Column(db.Float, nullable=False)
     image_url = db.Column(db.String(500), nullable=True)  # Ruta relativa a static/uploads
 
@@ -80,6 +97,7 @@ class User(db.Model):
     business_id = db.Column(db.Integer, db.ForeignKey('businesses.id'), nullable=True)
     role = db.Column(db.String(20), default='user')
     created_at = db.Column(db.DateTime, default=db.func.now())
+    # La relación a 'favorite_businesses' se define a través del backref en Business.favorited_by
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -265,6 +283,47 @@ def join():
 
     return render_template('join.html', categories=categories)
 
+@app.route('/api/csrf-token', methods=['GET'])
+def get_csrf_token():
+    from flask_wtf.csrf import generate_csrf
+    return jsonify({'csrf_token': generate_csrf()})
+
+@app.route('/register_client', methods=['GET', 'POST'], strict_slashes=False)
+def register_client():
+    if 'user_id' in session:
+        return redirect(url_for('home'))
+
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+
+        if not email or not password or not confirm_password:
+            return render_template('register_client.html', error="Todos los campos son requeridos.")
+
+        if password != confirm_password:
+            return render_template('register_client.html', error="Las contraseñas no coinciden.")
+
+        if len(password) < 6:
+            return render_template('register_client.html', error="La contraseña debe tener al menos 6 caracteres.")
+
+        if User.query.filter_by(email=email).first():
+            return render_template('register_client.html', error="Este email ya está registrado.")
+
+        user = User(email=email, role='client') # Nuevo rol 'client'
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        # Iniciar sesión y redirigir a la home
+        session['user_id'] = user.id
+        session['user_email'] = user.email
+        session['user_role'] = user.role
+        return redirect(url_for('home'))
+
+    return render_template('register_client.html')
+
+
 @app.route('/', strict_slashes=False)
 def home():
     search_query = request.args.get('search', '').strip()
@@ -307,15 +366,44 @@ def profile(id):
     avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(business_id=id).scalar() or 0
     
     is_owner = False
+    is_favorited = False
+    # --- INICIO LÓGICA DE CONTEO DE VISITAS ---
     if 'user_id' in session:
         user = User.query.get(session['user_id'])
-        if user and user.business_id == id:
-            is_owner = True
-    
+        if user:
+            if user.business_id == id:
+                is_owner = True
+            else:
+                # Contar la visita solo si el usuario no es el dueño
+                # y si no ha visitado antes este perfil.
+                if business not in user.viewed_businesses:
+                    user.viewed_businesses.append(business)
+                    db.session.commit()
+
+            # Comprobar si este negocio está en la lista de favoritos del usuario
+            if business in user.favorite_businesses:
+                is_favorited = True
+    view_count = len(business.viewed_by)
+    # --- FIN LÓGICA DE CONTEO DE VISITAS ---
     return render_template('profile.html', business=business, products=products,
                          reviews=[r.to_dict() for r in reviews_query],
-                         avg_rating=round(avg_rating, 1),
-                         is_owner=is_owner)
+                         avg_rating=round(avg_rating, 1), view_count=view_count,
+                         is_owner=is_owner,
+                         is_favorited=is_favorited)
+
+@app.route('/api/business/<int:business_id>/favorite', methods=['POST'], strict_slashes=False)
+@login_required
+def toggle_favorite(business_id):
+    user = User.query.get(session['user_id'])
+    business = Business.query.get_or_404(business_id)
+    if business in user.favorite_businesses:
+        user.favorite_businesses.remove(business)
+        db.session.commit()
+        return jsonify({"success": True, "favorited": False})
+    else:
+        user.favorite_businesses.append(business)
+        db.session.commit()
+        return jsonify({"success": True, "favorited": True})
 
 @app.route('/profile/<int:id>/update_logo', methods=['POST'], strict_slashes=False)
 @owner_required
@@ -398,50 +486,62 @@ def chat():
     if not user_msg:
         return jsonify({"error": "Falta 'message'"}), 400
 
-    # --- INICIO DE LA MODIFICACIÓN (MEJORADA) ---
-    
-    # 1. Limpiar y normalizar el mensaje del usuario para una mejor búsqueda.
-    #    - Convertir a minúsculas.
-    #    - Eliminar signos de puntuación comunes.
-    #    - Reemplazar vocales con acentos por vocales sin acento.
+    # --- INICIO DE LA MEJORA DEL CHATBOT ---
     import re
     import unicodedata
-    
+
+    # 1. Limpiar el mensaje del usuario
     cleaned_msg = user_msg.lower()
-    cleaned_msg = re.sub(r'[^\w\s]', '', cleaned_msg) # Elimina puntuación
+    cleaned_msg = re.sub(r'[^\w\s]', '', cleaned_msg)
     cleaned_msg = ''.join(c for c in unicodedata.normalize('NFD', cleaned_msg) if unicodedata.category(c) != 'Mn')
 
-    # 2. Buscar negocios relevantes usando las palabras limpias.
-    search_terms = cleaned_msg.split()
-    filters = [
-        db.or_(
-            Business.name.ilike(f'%{term}%'),
-            Business.description.ilike(f'%{term}%'),
-            Business.category.ilike(f'%{term}%')
-        ) for term in search_terms if len(term) > 2 # Ignorar palabras cortas
-    ]
-    
+    # 2. Determinar la intención del usuario
+    # Palabras clave que indican una búsqueda de negocio.
+    search_keywords = ['busco', 'recomienda', 'necesito', 'donde hay', 'quiero', 'encuentra', 'negocio', 'tienda', 'servicio', 'comida', 'ropa']
+    is_search_intent = any(keyword in cleaned_msg for keyword in search_keywords)
+    is_short_message = len(cleaned_msg.split()) <= 2
+
     relevant_businesses = []
-    if filters:
-        # Usamos .limit(5) para no sobrecargar el prompt con demasiados negocios.
-        found_businesses = Business.query.filter(db.and_(*filters)).limit(5).all()
-        for b in found_businesses:
-            relevant_businesses.append(f"- Nombre: {b.name}, Categoría: {b.category}, Descripción: {b.description[:150]}...")
+    business_context_str = "No se ha realizado una búsqueda de negocios."
 
-    # 3. Construir un prompt dinámico para la IA.
-    #    Ahora la IA tendrá el contexto de los negocios que encontraste.
-    business_context_str = "\n".join(relevant_businesses) if relevant_businesses else "No se encontraron negocios relevantes en el directorio."
+    # 3. Si la intención es buscar (o no es un mensaje corto), buscar en la BD
+    if is_search_intent or not is_short_message:
+        search_terms = cleaned_msg.split()
+        filters = [
+            db.or_(
+                Business.name.ilike(f'%{term}%'),
+                Business.description.ilike(f'%{term}%'),
+                Business.category.ilike(f'%{term}%')
+            ) for term in search_terms if len(term) > 2
+        ]
+        
+        if filters:
+            found_businesses = Business.query.filter(db.or_(*filters)).limit(5).all()
+            for b in found_businesses:
+                relevant_businesses.append(f"- Nombre: {b.name}, Categoría: {b.category}, Descripción: {b.description[:150]}...")
+        
+        business_context_str = "\n".join(relevant_businesses) if relevant_businesses else "No se encontraron negocios relevantes en el directorio para esta búsqueda."
 
-    final_prompt = (
-        "Eres un asistente virtual para 'Comuni IA', un directorio de negocios locales en Santa Cruz, Bolivia. "
-        "Tu objetivo es ayudar a los usuarios a encontrar el negocio que necesitan. "
-        "Basado en la pregunta del usuario y la lista de negocios que te proporciono, recomienda la mejor opción y explica por qué. "
-        "Si ningún negocio parece adecuado, informa al usuario que no encontraste una coincidencia y anímale a explorar el directorio manualmente.\n\n"
-        f"LISTA DE NEGOCIOS ENCONTRADOS:\n{business_context_str}\n\n"
-        f"PREGUNTA DEL USUARIO:\n'{user_msg}'\n\n"
-        "Asistente:"
-    )
-    # --- FIN DE LA MODIFICACIÓN (MEJORADA) ---
+    # 4. Construir el prompt final para la IA
+    if is_search_intent or not is_short_message:
+        # Prompt enfocado en búsqueda
+        final_prompt = (
+            "Eres un asistente virtual para 'Comuni IA', un directorio de negocios locales en Santa Cruz, Bolivia. "
+            "Tu objetivo es ayudar a los usuarios a encontrar el negocio que necesitan. "
+            "Basado en la pregunta del usuario y la lista de negocios que te proporciono, recomienda la mejor opción y explica por qué. "
+            "Si ningún negocio parece adecuado, informa al usuario que no encontraste una coincidencia y anímale a explorar el directorio manualmente.\n\n"
+            f"LISTA DE NEGOCIOS ENCONTRADOS:\n{business_context_str}\n\n"
+            f"PREGUNTA DEL USUARIO:\n'{user_msg}'\n\n"
+            "Asistente:"
+        )
+    else:
+        # Prompt para conversación general
+        final_prompt = (
+            "Eres un asistente virtual amigable y servicial para 'Comuni IA', un directorio de negocios locales. "
+            "Estás teniendo una conversación general. Responde de forma breve y natural. Si te preguntan qué puedes hacer, explica que puedes ayudar a encontrar negocios o dar consejos de marketing.\n\n"
+            f"Usuario: {user_msg}\nAsistente:"
+        )
+    # --- FIN DE LA MEJORA DEL CHATBOT ---
 
     try:
         # Usamos el nuevo prompt dinámico
@@ -485,31 +585,63 @@ def add_product(business_id):
         }
     })
 
-@app.route('/api/products/<int:product_id>', methods=['DELETE'], strict_slashes=False)
-def delete_product(product_id):
+@app.route('/api/products/<int:product_id>', methods=['DELETE', 'PUT'], strict_slashes=False)
+def manage_product(product_id):
     product = Product.query.get_or_404(product_id)
     
     if 'user_id' in session:
         user = User.query.get(session['user_id'])
         if user and user.business_id == product.business_id:
-            db.session.delete(product)
-            db.session.commit()
-            return jsonify({"success": True})
+            if request.method == 'DELETE':
+                db.session.delete(product)
+                db.session.commit()
+                return jsonify({"success": True})
+            elif request.method == 'PUT':
+                name = request.form.get('name', '').strip()
+                price = float(request.form.get('price', 0))
+                description = request.form.get('description', '').strip()
+                
+                if not name or price <= 0:
+                    return jsonify({"error": "Nombre y precio válido son requeridos"}), 400
+                
+                image = request.files.get('image') if 'image' in request.files else None
+                if image and image.filename:
+                    try:
+                        # Si hay una imagen anterior, la borramos
+                        if product.image_url:
+                            old_image_path = images.path(product.image_url)
+                            if os.path.exists(old_image_path):
+                                os.remove(old_image_path)
+                        product.image_url = images.save(image)
+                    except Exception as e:
+                        return jsonify({"error": f"Error al subir imagen: {str(e)}"}), 500
+                
+                product.name = name
+                product.price = price
+                product.description = description
+                db.session.commit()
+                return jsonify({"success": True})
     
     abort(403) # abort() es manejado por el errorhandler y devuelve JSON
 
 # RUTAS DE RESEÑAS (SIN CAMBIOS)
 @app.route('/api/reviews/<int:business_id>', methods=['POST'], strict_slashes=False)
+@login_required # Proteger la ruta, solo usuarios logueados pueden comentar
 def add_review(business_id):
     business = Business.query.get_or_404(business_id)
     data = request.get_json(silent=True) or {}
     
-    author = data.get('author', '').strip()
-    rating = data.get('rating', 0)
+    # El autor es el usuario logueado, no se toma del formulario.
+    author = session.get('user_email', 'Anónimo')
     comment = data.get('comment', '').strip()
     
-    if not author or not comment or rating < 1 or rating > 5:
-        return jsonify({"error": "Todos los campos son requeridos y rating debe ser 1-5"}), 400
+    try:
+        rating = int(data.get('rating', 0))
+    except (ValueError, TypeError):
+        rating = 0
+
+    if not comment or rating < 1 or rating > 5:
+        return jsonify({"error": "El comentario y una calificación de 1 a 5 son requeridos."}), 400
     
     review = Review(business_id=business_id, author=author, rating=rating, comment=comment)
     db.session.add(review)

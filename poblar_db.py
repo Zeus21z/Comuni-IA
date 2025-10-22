@@ -2,9 +2,7 @@
 Script para poblar la base de datos con 2 negocios por categoría
 Incluye productos específicos para cada tipo de negocio
 """
-import sys
-sys.path.insert(0, 'D:\\Comunianew')
-
+import os
 from app import app, db, User, Business, Product
 from werkzeug.security import generate_password_hash
 
@@ -353,6 +351,22 @@ negocios_data = [
 def poblar_base_datos():
     with app.app_context():
         print("🚀 Iniciando población de base de datos...\n")
+
+        # --- INICIO DE LA MEJORA: LIMPIAR LA BASE DE DATOS ---
+        print("🧹 Limpiando tablas existentes para un inicio limpio...")
+        try:
+            # El orden es importante para respetar las Foreign Keys
+            db.session.execute(db.text('DELETE FROM favorites'))
+            db.session.execute(db.text('DELETE FROM products'))
+            db.session.execute(db.text('DELETE FROM reviews'))
+            db.session.execute(db.text('DELETE FROM users'))
+            db.session.execute(db.text('DELETE FROM businesses'))
+            db.session.commit()
+            print("   ✅ Tablas limpiadas correctamente.")
+        except Exception as e:
+            print(f"   ⚠️  Advertencia: No se pudieron limpiar las tablas. Puede que sea la primera ejecución. Error: {e}")
+            db.session.rollback()
+        # --- FIN DE LA MEJORA ---
         
         credenciales = []
         
@@ -421,8 +435,9 @@ def poblar_base_datos():
 if __name__ == '__main__':
     credenciales = poblar_base_datos()
     
+    output_path = os.path.join(os.path.dirname(__file__), 'CREDENCIALES_NEGOCIOS.txt')
     # Guardar credenciales en archivo TXT
-    with open('D:\\Comunianew\\CREDENCIALES_NEGOCIOS.txt', 'w', encoding='utf-8') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write("=" * 80 + "\n")
         f.write("CREDENCIALES DE ACCESO - COMUNI IA\n")
         f.write("=" * 80 + "\n\n")
@@ -453,5 +468,5 @@ if __name__ == '__main__':
         f.write("- Para cambiar contraseñas, hazlo desde el panel de admin\n")
         f.write("=" * 80 + "\n")
     
-    print(f"\n📄 Archivo de credenciales creado: CREDENCIALES_NEGOCIOS.txt")
+    print(f"\n📄 Archivo de credenciales creado: {output_path}")
     print("\n🎉 ¡Proceso completado exitosamente!")

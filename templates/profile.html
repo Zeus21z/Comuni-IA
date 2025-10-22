@@ -6,85 +6,9 @@
   <title>{{ business.name }} — Comuni IA</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet"/>
-  <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <style>
-    .profile-banner {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      height: 250px;
-      position: relative;
-    }
-    .profile-header {
-      margin-top: -100px;
-      position: relative;
-      z-index: 10;
-    }
-    .profile-avatar {
-      width: 150px;
-      height: 150px;
-      border-radius: 20px;
-      border: 5px solid white;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-      object-fit: cover;
-      background: white;
-    }
-    .stats-box {
-      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-      border-radius: 16px;
-      padding: 1.5rem;
-      text-align: center;
-      transition: transform 0.3s ease;
-    }
-    .stats-box:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    }
-    .product-card-new {
-      border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid #e2e8f0;
-      transition: all 0.3s ease;
-    }
-    .product-card-new:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 12px 30px rgba(0,0,0,0.1);
-    }
-    .product-img-new {
-      height: 180px;
-      object-fit: cover;
-      width: 100%;
-    }
-    .review-box {
-      border-left: 4px solid #667eea;
-      border-radius: 12px;
-      padding: 1.5rem;
-      background: #f8fafc;
-      transition: all 0.3s ease;
-    }
-    .review-box:hover {
-      background: white;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    .section-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #1e293b;
-      margin-bottom: 1.5rem;
-      position: relative;
-      padding-bottom: 0.5rem;
-    }
-    .section-title::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 50px;
-      height: 3px;
-      background: #667eea;
-      border-radius: 2px;
-    }
-  </style>
+  <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet"/>
 </head>
 <body data-business-id="{{ business.id }}" data-is-owner="{{ 'true' if is_owner else 'false' }}" data-latitude="{{ business.latitude or '' }}" data-longitude="{{ business.longitude or '' }}">
 
@@ -113,7 +37,7 @@
 </nav>
 
 <!-- BANNER -->
-<div class="profile-banner"></div>
+<div class="profile-banner" style="background-image: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
 
 <!-- CONTENIDO -->
 <div class="container pb-5">
@@ -121,9 +45,9 @@
     <div class="row">
       <div class="col-md-3 text-center mb-3 position-relative">
         {% if business.logo %}
-        <img src="{{ url_for('static', filename='uploads/' + business.logo) }}" class="profile-avatar mx-auto">
+        <img src="{{ url_for('static', filename='uploads/' + business.logo) }}" class="profile-avatar shadow-lg mx-auto">
         {% else %}
-        <div class="profile-avatar mx-auto d-flex align-items-center justify-content-center bg-light">
+        <div class="profile-avatar shadow-lg mx-auto d-flex align-items-center justify-content-center bg-light">
           <i class="bi bi-shop display-4 text-muted"></i>
         </div>
         {% endif %}
@@ -134,13 +58,21 @@
         {% endif %}
       </div>
       <div class="col-md-9">
-        <div class="bg-white rounded-4 shadow-sm p-4">
+        <div class="bg-white rounded-4 shadow-sm p-4 h-100">
           <div class="d-flex justify-content-between align-items-start">
-            <h1 class="h3 fw-bold mb-2">{{ business.name }}</h1>
-            {% if is_owner %}
-            <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editBusinessModal">
-              <i class="bi bi-pencil-square"></i> Editar
+            <div>
+              <h1 class="h3 fw-bold mb-2">{{ business.name }}</h1>
+            </div>
+            {% if session.user_id and not is_owner %}
+            <button id="favoriteBtn" class="btn btn-lg btn-outline-danger border-0">
+              <i class="bi {{ 'bi-heart-fill' if is_favorited else 'bi-heart' }}"></i>
             </button>
+            {% elif is_owner %}
+            <div>
+              <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editBusinessModal">
+                <i class="bi bi-pencil-square"></i> Editar
+              </button>
+            </div>
             {% endif %}
           </div>
           <p class="text-muted mb-2"><i class="bi bi-grid me-2"></i>{{ business.category }}</p>
@@ -174,28 +106,28 @@
   <!-- STATS -->
   <div class="row g-3 my-4">
     <div class="col-md-3 col-6">
-      <div class="stats-box">
+      <div class="stats-box shadow-sm">
         <i class="bi bi-eye display-6 text-primary"></i>
-        <h4 class="mt-2 mb-0">1.2K</h4>
+        <h4 class="mt-2 mb-0">{{ view_count }}</h4>
         <small class="text-muted">Visitas</small>
       </div>
     </div>
     <div class="col-md-3 col-6">
-      <div class="stats-box">
+      <div class="stats-box shadow-sm">
         <i class="bi bi-bag display-6 text-success"></i>
         <h4 class="mt-2 mb-0">{{ products|length }}</h4>
         <small class="text-muted">Productos</small>
       </div>
     </div>
     <div class="col-md-3 col-6">
-      <div class="stats-box">
+      <div class="stats-box shadow-sm">
         <i class="bi bi-star-fill display-6 text-warning"></i>
         <h4 class="mt-2 mb-0">{{ avg_rating if avg_rating > 0 else 'N/A' }}</h4>
         <small class="text-muted">Rating</small>
       </div>
     </div>
     <div class="col-md-3 col-6">
-      <div class="stats-box">
+      <div class="stats-box shadow-sm">
         <i class="bi bi-chat-dots display-6 text-info"></i>
         <h4 class="mt-2 mb-0">{{ reviews|length }}</h4>
         <small class="text-muted">Reseñas</small>
@@ -217,24 +149,59 @@
     <div id="products-list" class="row g-3">
       {% if products %}
         {% for product in products %}
-        <div class="col-lg-3 col-md-4 col-6">
-          <div class="card product-card-new h-100">
-            {% if product.image_url %}
-            <img src="{{ url_for('static', filename='uploads/' + product.image_url) }}" class="product-img-new">
-            {% else %}
-            <div class="product-img-new bg-light d-flex align-items-center justify-content-center">
-              <i class="bi bi-image display-4 text-muted"></i>
-            </div>
-            {% endif %}
-            <div class="card-body p-3">
-              <h6 class="fw-bold mb-2">{{ product.name }}</h6>
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="h6 text-primary mb-0">Bs. {{ "%.2f"|format(product.price) }}</span>
-                {% if is_owner %}
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(this)" data-id="{{ product.id }}">
-                  <i class="bi bi-trash"></i>
-                </button>
+        <div class="col-lg-3 col-md-4 col-sm-6 col-12">
+          <div class="product-card-new" data-product-id="{{ product.id }}">
+            <div class="product-card-inner">
+              <!-- Frente de la tarjeta -->
+              <div class="product-card-front">
+                {% if product.image_url %}
+                <img src="{{ url_for('static', filename='uploads/' + product.image_url) }}" class="product-img-new">
+                {% else %}
+                <div class="product-img-new bg-light d-flex align-items-center justify-content-center">
+                  <i class="bi bi-image display-4 text-muted"></i>
+                </div>
                 {% endif %}
+                <div class="p-3">
+                  <h6 class="fw-bold mb-2">{{ product.name }}</h6>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class="h6 text-primary mb-0">Bs. {{ "%.2f"|format(product.price) }}</span>
+                    <button class="btn btn-sm btn-outline-primary flip-button">
+                      <i class="bi bi-arrow-clockwise"></i> Ver Detalles
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Reverso de la tarjeta -->
+              <div class="product-card-back">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                  <h6 class="fw-bold mb-0">{{ product.name }}</h6>
+                  <button class="btn btn-sm btn-outline-secondary flip-button">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                  </button>
+                </div>
+                <div class="product-description small">
+                  {% if product.description %}
+                  <p class="mb-3">{{ product.description }}</p>
+                  {% else %}
+                  <p class="text-muted">Sin descripción disponible</p>
+                  {% endif %}
+                </div>
+                <div class="mt-auto">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class="h6 text-primary mb-0">Bs. {{ "%.2f"|format(product.price) }}</span>
+                    {% if is_owner %}
+                    <div class="btn-group">
+                      <button class="btn btn-sm btn-outline-primary edit-product" data-bs-toggle="modal" data-bs-target="#editProductModal" data-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.price }}" data-description="{{ product.description or '' }}">
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger delete-product" data-id="{{ product.id }}">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -250,36 +217,118 @@
     </div>
   </section>
 
-  <!-- RESEÑAS -->
-  <section>
-    <h2 class="section-title">Reseñas</h2>
-    <div class="row g-3">
-      {% if reviews %}
-        {% for review in reviews %}
-        <div class="col-md-6">
-          <div class="review-box">
-            <div class="d-flex justify-content-between mb-2">
-              <h6 class="fw-bold mb-0"><i class="bi bi-person-circle text-primary me-2"></i>{{ review.author }}</h6>
-              <small class="text-muted">{{ review.created_at }}</small>
-            </div>
-            <div class="text-warning mb-2">
-              {% for i in range(review.rating) %}<i class="bi bi-star-fill"></i>{% endfor %}
-              {% for i in range(5 - review.rating) %}<i class="bi bi-star"></i>{% endfor %}
-            </div>
-            <p class="text-muted mb-0">{{ review.comment }}</p>
+  <!-- MAPA Y RESEÑAS -->
+  <section class="mt-5">
+    <div class="row g-4">
+      <!-- Columna de Mapa -->
+      <div class="col-lg-5">
+        <h2 class="section-title">Ubicación</h2>
+        <div id="profileMap" class="map-container shadow-sm"></div>
+        {% if not business.latitude or not business.longitude %}
+        <p class="text-muted mt-2 small">El dueño aún no ha especificado una ubicación exacta en el mapa.</p>
+        {% endif %}
+      </div>
+
+      <!-- Columna de Reseñas -->
+      <div class="col-lg-7">
+        <h2 class="section-title">Reseñas</h2>
+
+        <!-- Formulario para dejar reseña (solo para clientes logueados) -->
+        {% if session.user_id and not is_owner %}
+        <div class="card shadow-sm mb-4">
+          <div class="card-body p-4">
+            <h5 class="card-title">Deja tu opinión</h5>
+            <form id="reviewForm">
+              <div class="mb-3">
+                <label class="form-label">Calificación</label>
+                <div id="ratingStars" class="text-warning" style="cursor: pointer; font-size: 1.5rem;">
+                  <i class="bi bi-star" data-value="1"></i>
+                  <i class="bi bi-star" data-value="2"></i>
+                  <i class="bi bi-star" data-value="3"></i>
+                  <i class="bi bi-star" data-value="4"></i>
+                  <i class="bi bi-star" data-value="5"></i>
+                </div>
+                <input type="hidden" name="rating" id="ratingInput" required>
+              </div>
+              <div class="mb-3">
+                <label for="comment" class="form-label">Comentario</label>
+                <textarea class="form-control" id="comment" name="comment" rows="3" required></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary">Enviar Reseña</button>
+            </form>
           </div>
         </div>
-        {% endfor %}
-      {% else %}
-      <div class="col-12 text-center py-5">
-        <i class="bi bi-star display-1 text-muted"></i>
-        <h5 class="mt-3">Sin reseñas</h5>
-        <p class="text-muted">Sé el primero en dejar una reseña</p>
+        {% elif not session.user_id %}
+        <div class="alert alert-info">
+          <a href="{{ url_for('login', next=request.url) }}">Inicia sesión</a> o 
+          <a href="{{ url_for('register_client') }}">regístrate como cliente</a> para dejar una reseña.
+        </div>
+        {% endif %}
+
+        <!-- Lista de Reseñas -->
+        <div id="reviews-list">
+          {% if reviews %}
+            {% for review in reviews %}
+            <div class="review-box shadow-sm mb-3">
+              <div class="d-flex justify-content-between mb-2">
+                <h6 class="fw-bold mb-0"><i class="bi bi-person-circle text-primary me-2"></i>{{ review.author }}</h6>
+                <small class="text-muted">{{ review.created_at }}</small>
+              </div>
+              <div class="text-warning mb-2">
+                {% for i in range(review.rating) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                {% for i in range(5 - review.rating) %}<i class="bi bi-star"></i>{% endfor %}
+              </div>
+              <p class="text-muted mb-0">{{ review.comment }}</p>
+            </div>
+            {% endfor %}
+          {% else %}
+          <div class="col-12 text-center py-5">
+            <i class="bi bi-star display-1 text-muted"></i>
+            <h5 class="mt-3">Sin reseñas</h5>
+            <p class="text-muted">Sé el primero en dejar una reseña.</p>
+          </div>
+          {% endif %}
+        </div>
       </div>
-      {% endif %}
     </div>
   </section>
 </div>
+
+<!-- MODAL EDITAR PRODUCTO -->
+{% if is_owner %}
+<div class="modal fade" id="editProductModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Editar Producto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form id="editProductForm">
+          <input type="hidden" name="product_id" id="editProductId">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Nombre</label>
+            <input type="text" class="form-control" name="name" id="editProductName" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Descripción</label>
+            <textarea class="form-control" name="description" id="editProductDescription" rows="4"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Precio (Bs.)</label>
+            <input type="number" class="form-control" name="price" id="editProductPrice" step="0.01" min="0" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Nueva Imagen (opcional)</label>
+            <input type="file" class="form-control" name="image" accept="image/*">
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Guardar Cambios</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- MODAL AGREGAR PRODUCTO -->
 {% if is_owner %}
@@ -403,6 +452,15 @@
   const businessId = document.body.dataset.businessId;
   const isOwner = document.body.dataset.isOwner === 'true';
 
+  // Manejador del efecto flip
+  document.querySelectorAll('.flip-button').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const card = e.target.closest('.product-card-new');
+      card.classList.toggle('flipped');
+    });
+  });
+
   // Solo inicializamos el formulario y el modal si el usuario es propietario
   if (isOwner) {
     const form = document.getElementById('addProductForm');
@@ -432,8 +490,69 @@
     });
   }
 
+  // --- LÓGICA DE FAVORITOS ---
+  const favoriteBtn = document.getElementById('favoriteBtn');
+  if (favoriteBtn) {
+    favoriteBtn.addEventListener('click', async () => {
+      try {
+        const resp = await fetch(`/api/business/${businessId}/favorite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+        if (result.success) {
+          const icon = favoriteBtn.querySelector('i');
+          if (result.favorited) {
+            icon.classList.remove('bi-heart');
+            icon.classList.add('bi-heart-fill');
+          } else {
+            icon.classList.remove('bi-heart-fill');
+            icon.classList.add('bi-heart');
+          }
+        }
+      } catch (err) {
+        alert('Error de conexión. No se pudo cambiar el estado de favorito.');
+      }
+    });
+  }
+
+  // Manejadores de edición de producto
+  document.querySelectorAll('.edit-product').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const data = e.target.closest('.edit-product').dataset;
+      document.getElementById('editProductId').value = data.id;
+      document.getElementById('editProductName').value = data.name;
+      document.getElementById('editProductDescription').value = data.description;
+      document.getElementById('editProductPrice').value = data.price;
+    });
+  });
+
+  const editProductForm = document.getElementById('editProductForm');
+  editProductForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const productId = formData.get('product_id');
+
+    try {
+      const resp = await fetch(`/api/products/${productId}`, {
+        method: 'PUT',
+        body: formData
+      });
+      const data = await resp.json();
+      if (data.success) {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editProductModal'));
+        modal.hide();
+        location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'No se pudo actualizar el producto'));
+      }
+    } catch (err) {
+      alert('Error de conexión');
+    }
+  });
+
   async function deleteProduct(btn) {
-    const id = btn.dataset.id;
+    const id = btn.closest('.delete-product').dataset.id;
     if (!confirm('¿Eliminar este producto?')) return;
 
     try {
@@ -458,14 +577,18 @@
   const defaultLat = -17.7833; // Santa Cruz
   const defaultLon = -63.1833;
 
-  // Mapa en el perfil (solo visualización)
-  if (lat && lon) {
-    const map = L.map('map').setView([lat, lon], 16);
+  const profileMapDiv = document.getElementById('profileMap');
+  if (profileMapDiv) {
+    const map = L.map('profileMap');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);
-    L.marker([lat, lon]).addTo(map)
-      .bindPopup('<b>{{ business.name }}</b><br>Ubicación exacta.').openPopup();
+    if (lat && lon) {
+      map.setView([lat, lon], 16);
+      L.marker([lat, lon]).addTo(map).bindPopup('<b>{{ business.name }}</b><br>Ubicación exacta.').openPopup();
+    } else {
+      map.setView([defaultLat, defaultLon], 12);
+    }
   }
 
   // Mapa en el modal de edición (interactivo)
@@ -513,6 +636,51 @@
       lonInput.value = '';
     });
   });
+  // --- LÓGICA DE RESEÑAS ---
+  const reviewForm = document.getElementById('reviewForm');
+  if (reviewForm) {
+    const ratingStars = document.getElementById('ratingStars');
+    const ratingInput = document.getElementById('ratingInput');
+
+    ratingStars.addEventListener('click', (e) => {
+      if (e.target.tagName === 'I') {
+        const rating = e.target.dataset.value;
+        ratingInput.value = rating;
+        // Actualizar visualmente las estrellas
+        Array.from(ratingStars.children).forEach(star => {
+          if (star.dataset.value <= rating) {
+            star.classList.remove('bi-star');
+            star.classList.add('bi-star-fill');
+          } else {
+            star.classList.remove('bi-star-fill');
+            star.classList.add('bi-star');
+          }
+        });
+      }
+    });
+
+    reviewForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(reviewForm);
+      const data = Object.fromEntries(formData.entries());
+
+      try {
+        const resp = await fetch(`/api/reviews/${businessId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (result.success) {
+          location.reload(); // Recargar solo si la reseña se envió con éxito
+        } else {
+          alert('Error: ' + (result.error || 'No se pudo enviar la reseña.'));
+        }
+      } catch (err) {
+        alert('Error de conexión al enviar la reseña.');
+      }
+    });
+  }
 </script>
 </body>
 </html>

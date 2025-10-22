@@ -1,199 +1,145 @@
 ===================================================================================
-                    GUÍA COMPLETA - COMUNI IA
+                        GUÍA DE USO - COMUNI IA
 ===================================================================================
 
-✅ TODO ESTÁ LISTO PARA USAR
+Este documento explica cómo poner en marcha y utilizar la plataforma Comuni IA.
 
 ===================================================================================
 PASO 1: POBLAR LA BASE DE DATOS
 ===================================================================================
 
-Ejecuta este comando para crear 18 negocios (2 por categoría) con productos:
+Para llenar la aplicación con datos de ejemplo, ejecuta el siguiente comando en la terminal.
+Esto creará 18 negocios con sus respectivos productos.
 
     cd D:\Comunianew
     python poblar_db.py
 
-Esto creará:
-- 18 negocios (2 por cada una de las 9 categorías)
-- Entre 4-5 productos por negocio (total ~80 productos)
-- Archivo CREDENCIALES_NEGOCIOS.txt con todos los logins
+Al finalizar, se generará el archivo `CREDENCIALES_NEGOCIOS.txt` con los datos de acceso para cada negocio.
 
 ===================================================================================
 PASO 2: INICIAR EL SERVIDOR
 ===================================================================================
 
+Una vez poblada la base de datos, inicia la aplicación con:
+
     python app.py
 
-Luego abre: http://localhost:5000
+Abre tu navegador y ve a: http://localhost:5000
 
 ===================================================================================
 PASO 3: PROBAR LOS NEGOCIOS
 ===================================================================================
 
-Abre el archivo: CREDENCIALES_NEGOCIOS.txt
+Abre el archivo `CREDENCIALES_NEGOCIOS.txt`.
 
-Encontrarás negocios como:
+Encontrarás los datos de acceso para negocios de ejemplo como:
 - Pizza Italia (pizzaitalia@email.com / pizza123)
 - Café Aroma (cafearoma@email.com / cafe123)
 - Moda Urbana (modaurbana@email.com / moda123)
 - Tech Store (techstore@email.com / tech123)
 - Gym Power (gympower@email.com / gym123)
-... y 13 más!
+... y 13 más.
 
 ===================================================================================
 CÓMO USAR CADA NEGOCIO
 ===================================================================================
 
 COMO CLIENTE:
-1. Busca negocios por categoría o nombre
-2. Ve el perfil del negocio
-3. Mira los productos/servicios y precios
-4. Contacta directo por WhatsApp/teléfono/email
-5. El mensaje se pre-completa con el producto que te interesa
+1. Busca y explora los perfiles de los negocios.
+2. Revisa sus productos, servicios y precios.
+3. Contacta al negocio directamente por WhatsApp, teléfono o email.
 
-COMO DUEÑO DE NEGOCIO:
-1. Inicia sesión con tu email y contraseña
-2. Serás redirigido a tu perfil
-3. Verás botones especiales: "Editar", "Agregar Producto", "Cambiar Logo"
-4. Solo TÚ puedes ver y usar estos botones
-5. Otros usuarios solo verán tu información de contacto
+COMO DUEÑO DEL NEGOCIO:
+1. Inicia sesión con el email y contraseña de tu negocio.
+2. Serás redirigido a tu perfil, donde verás botones de edición.
+3. Podrás editar tu información, cambiar el logo y agregar o eliminar productos.
+4. Estos botones de gestión solo son visibles para ti.
 
 ===================================================================================
-FLUJO DE CONTACTO/COMPRA
+SISTEMA DE CONTACTO
 ===================================================================================
 
 El sistema NO procesa pagos directamente, sino que facilita el contacto:
 
-1. CLIENTE ve producto: "Pizza Margarita - Bs. 45.00"
-2. Cliente hace click en el botón de WhatsApp del negocio
-3. Se abre WhatsApp con mensaje pre-escrito:
-   "Hola Pizza Italia, me interesa la Pizza Margarita"
-4. Cliente y dueño coordinan entrega y pago directamente
+1. Un cliente ve un producto que le interesa.
+2. Hace clic en el botón de WhatsApp del negocio.
+3. Se abre la aplicación de WhatsApp con un mensaje listo para enviar.
+4. El cliente y el dueño del negocio coordinan el pago y la entrega por fuera de la plataforma.
 
-VENTAJAS:
-✅ Sin comisiones de plataforma
-✅ Pago directo al vendedor
-✅ Flexible (efectivo, transferencia, QR)
-✅ Comunicación directa
+Este método permite una comunicación directa, sin intermediarios ni comisiones.
 
 ===================================================================================
-CHATBOT IA - CARACTERÍSTICAS
+ASISTENTE VIRTUAL (CHATBOT)
 ===================================================================================
 
-El chatbot está en TODAS las páginas (botón flotante morado en esquina)
+En la esquina inferior derecha de la pantalla encontrarás un botón flotante para acceder al chatbot.
 
-PUEDE AYUDAR CON:
-✅ Consejos de marketing digital
-✅ Cómo mejorar tu perfil
-✅ Hashtags locales (#SantaCruzBolivia)
-✅ Ferias y mercados locales (Cambódromo, Feria Barrio)
-✅ Estrategias para redes sociales
-✅ Cómo usar la plataforma Comuni IA
+Este asistente puede ayudarte con:
+- Consejos de marketing para tu negocio.
+- Ideas para mejorar la visibilidad de tu perfil.
+- Sugerencias sobre hashtags y ferias locales en Santa Cruz.
+- Estrategias para redes sociales.
 
-EJEMPLOS DE PREGUNTAS:
-- "¿Cómo puedo atraer más clientes?"
-- "¿Qué hashtags uso para mi negocio de comida?"
-- "¿Dónde puedo vender mis productos en Santa Cruz?"
-- "¿Cómo mejoro mi perfil?"
+Puedes preguntarle cosas como:
+- "¿Cómo puedo atraer más clientes a mi cafetería?"
+- "¿Qué hashtags son buenos para un negocio de ropa?"
+- "¿Cómo puedo usar mejor la plataforma?"
 
 ===================================================================================
-PRÓXIMOS PASOS RECOMENDADOS
+RECOMENDACIONES
 ===================================================================================
 
-INMEDIATO:
-1. ✅ Ejecutar poblar_db.py
-2. ✅ Revisar CREDENCIALES_NEGOCIOS.txt
-3. ✅ Iniciar app.py
-4. ✅ Probar login con varios negocios
+Una vez que la aplicación esté funcionando, te recomendamos:
 
-OPCIONAL (MEJORAS VISUALES):
-5. Agregar logos a cada negocio (entra como dueño → Cambiar logo)
-6. Agregar imágenes a productos (Agregar Producto → subir imagen)
-7. Marcar ubicaciones exactas (Editar → usar mapa)
-8. Agregar más productos según necesites
+1. Iniciar sesión con las cuentas de los negocios de ejemplo.
+2. Probar a editar la información del perfil.
+3. Subir un logo y agregar imágenes a los productos.
+4. Fijar la ubicación exacta en el mapa interactivo.
 
 ===================================================================================
 SOLUCIÓN DE PROBLEMAS COMUNES
 ===================================================================================
 
-❌ ERROR: "No module named 'flask_uploads'"
-   SOLUCIÓN: pip install Flask-Reuploaded
+ERROR: "No module named 'flask_uploads'" o similar.
+SOLUCIÓN: Instala las dependencias con `pip install -r requirements.txt`. Si falta una específica como `Flask-Reuploaded`, instálala con `pip install Flask-Reuploaded`.
 
-❌ ERROR: "No such table: businesses"
-   SOLUCIÓN: python migrate_complete.py
+ERROR: "No such table: businesses"
+SOLUCIÓN: Asegúrate de haber ejecutado `python poblar_db.py` primero.
 
-❌ ERROR: Al ejecutar poblar_db.py
-   SOLUCIÓN: 
-   - cd D:\Comunianew
-   - Verifica que app.py esté en la carpeta
-   - python poblar_db.py
+Los negocios no aparecen en la página de inicio.
+SOLUCIÓN: Verifica que el script `poblar_db.py` se haya ejecutado correctamente. Deberías ver un mensaje de "¡Proceso completado exitosamente!". Luego, refresca la página en tu navegador.
 
-❌ Los negocios no aparecen en la home
-   SOLUCIÓN:
-   - Verifica que poblar_db.py se ejecutó sin errores
-   - Debe decir "✅ ¡Población completada!"
-   - Refresca la página (F5)
+No puedo subir imágenes.
+SOLUCIÓN: Asegúrate de que exista la carpeta `static\uploads` dentro de tu proyecto. Si no existe, créala manualmente.
 
-❌ No puedo subir imágenes
-   SOLUCIÓN:
-   - mkdir static\uploads
-   - Verifica permisos de escritura en la carpeta
+El chatbot no responde o da error.
+SOLUCIÓN: El chatbot necesita una clave de API de Google. Agrégala en el archivo `.env` en la línea `GEMINI_API_KEY=`. Puedes obtener una clave gratuita en el sitio de Google AI Studio.
 
-❌ El chatbot no responde
-   SOLUCIÓN:
-   - Agrega GEMINI_API_KEY en .env
-   - Si no tienes API key, obtén una gratis en: ai.google.dev
-
-❌ No puedo editar mi negocio
-   SOLUCIÓN:
-   - Asegúrate de estar logueado con la cuenta correcta
-   - Verifica en CREDENCIALES_NEGOCIOS.txt tu email/password
-   - Solo el DUEÑO ve los botones de edición
-
-❌ Error 403 al agregar producto
-   SOLUCIÓN:
-   - Solo el dueño puede agregar productos
-   - Verifica que estés logueado con la cuenta del negocio
+No puedo editar mi negocio o agregar productos (Error 403).
+SOLUCIÓN: Estas acciones solo están permitidas para el dueño del negocio. Asegúrate de haber iniciado sesión con la cuenta correcta (la que aparece en `CREDENCIALES_NEGOCIOS.txt`).
 
 ===================================================================================
 RESUMEN DE ARCHIVOS IMPORTANTES
 ===================================================================================
 
 D:\Comunianew\
-├── app.py                          ← Aplicación principal
-├── poblar_db.py                    ← Script para crear negocios
-├── comuni_ia.db                    ← Base de datos SQLite
-├── CREDENCIALES_NEGOCIOS.txt       ←  LOGINS DE TODOS LOS NEGOCIOS
-├── GUIA_COMPLETA.txt               ← Este archivo
-├── requirements.txt                ← Dependencias Python
-├── .env                            ← Variables de entorno (GEMINI_API_KEY)
+├── app.py                          # Código principal de la aplicación.
+├── poblar_db.py                    # Script para llenar la base de datos.
+├── comuni_ia.db                    # Archivo de la base de datos.
+├── CREDENCIALES_NEGOCIOS.txt       # Logins de los negocios de ejemplo.
+├── GUIA_COMPLETA.txt               # Este archivo.
+├── requirements.txt                # Lista de librerías necesarias.
+├── .env                            # Archivo para claves de API.
 ├── templates/                      ← HTML templates
-│   ├── index.html                 ← Página principal
-│   ├── profile.html               ← Perfil de negocio
-│   ├── login.html                 ← Login
-│   └── join.html                  ← Registro
+│   ├── index.html                  # Página de inicio.
+│   ├── profile.html                # Perfil de negocio.
+│   └── ...
 ├── static/
-│   ├── uploads/                   ← Imágenes subidas (crear si no existe)
-│   ├── css/styles.css             ← Estilos
-│   └── js/chatbot.js              ← JavaScript del chatbot
+│   ├── uploads/                    # Carpeta para imágenes subidas.
+│   ├── css/styles.css              # Hoja de estilos.
+│   └── js/chatbot.js               # Lógica del chatbot.
 └── migrations/                     ← Migraciones de BD
 
 ===================================================================================
-NOTAS FINALES
-===================================================================================
-
-✅ TODO EL CÓDIGO ESTÁ FUNCIONANDO
-✅ EL CHATBOT IA ESTÁ INTACTO Y OPERATIVO
-✅ LOS NEGOCIOS SON REALES Y VARIADOS
-✅ CADA NEGOCIO TIENE PRODUCTOS RELEVANTES
-✅ SISTEMA DE CONTACTO ADAPTABLE POR CATEGORÍA
-✅ EDICIÓN DE PERFIL COMPLETA
-✅ MAPA INTERACTIVO INCLUIDO
-
-⚠️ IMPORTANTE:
-- El sistema NO procesa pagos (contacto directo vendedor-cliente)
-- El chatbot requiere GEMINI_API_KEY para funcionar
-
-===================================================================================
-                        ¡ÉXITO CON COMUNI IA! 🚀
+                        Fin de la guía.
 ===================================================================================
