@@ -1,7 +1,6 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session, flash
 from flask_sqlalchemy import SQLAlchemy
-from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate
 from sqlalchemy import text
 from dotenv import load_dotenv
@@ -21,8 +20,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JSON_AS_ASCII'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'comunia-secret-key-2025')
 app.config['UPLOADED_IMAGES_DEST'] = os.path.join(BASEDIR, 'static', 'uploads')
-app.config['UPLOADED_IMAGES_ALLOW'] = IMAGES  # Solo imágenes (jpg, png, etc.)
-csrf = CSRFProtect(app)
+app.config['UPLOADED_IMAGES_ALLOW'] = IMAGES
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -177,6 +175,7 @@ def login():
             session['user_id'] = user.id
             session['user_email'] = user.email
             session['user_role'] = user.role
+            flash(f'✅ ¡Bienvenido de vuelta, {user.email}!', 'success')
             
             next_page = request.args.get('next')
             if next_page:
@@ -195,6 +194,7 @@ def login():
 @app.route('/logout', strict_slashes=False)
 def logout():
     session.clear()
+    flash('👋 Has cerrado sesión. ¡Vuelve pronto!', 'info')
     return redirect(url_for('home'))
 
 @app.route('/join', methods=['GET', 'POST'], strict_slashes=False)
@@ -204,6 +204,11 @@ def join():
                   "Tecnología", "Salud y Bienestar", "Educación", "Otros"]
     
     if 'user_id' in session:
+        user = User.query.get(session['user_id'])
+        if user and user.business_id:
+            flash('⚠️ Ya tienes un negocio registrado. No puedes registrar otro.', 'warning')
+        else:
+            flash('⚠️ Para registrar un negocio, primero debes cerrar tu sesión de cliente actual.', 'warning')
         return redirect(url_for('home'))
 
     if request.method == 'POST':
@@ -225,21 +230,21 @@ def join():
 
         # Validaciones user
         if not email or not password or not confirm_password:
-            return render_template('join.html', error="Campos de cuenta son requeridos", form=request.form, categories=categories)
+            return render_template('join.html', error="Campos de cuenta son requeridos", categories=categories, form_data=request.form)
 
         if password != confirm_password:
-            return render_template('join.html', error="Contraseñas no coinciden", form=request.form, categories=categories)
+            return render_template('join.html', error="Contraseñas no coinciden", categories=categories, form_data=request.form)
 
         if len(password) < 6:
-            return render_template('join.html', error="Contraseña debe tener al menos 6 caracteres", form=request.form, categories=categories)
+            return render_template('join.html', error="Contraseña debe tener al menos 6 caracteres", categories=categories, form_data=request.form)
 
         existing_user = User.query.filter_by(email=email).first()
         if existing_user:
-            return render_template('join.html', error="Email ya registrado", form=request.form, categories=categories)
+            return render_template('join.html', error="Email ya registrado", categories=categories, form_data=request.form)
 
         # Validaciones business
         if not name or not description:
-            return render_template('join.html', error="Nombre y descripción del negocio son obligatorios", form=request.form, categories=categories)
+            return render_template('join.html', error="Nombre y descripción del negocio son obligatorios", categories=categories, form_data=request.form)
 
         try:
             # 1. Manejo de imagen (logo) dentro del try
@@ -274,23 +279,19 @@ def join():
             session['user_id'] = user.id
             session['user_email'] = user.email
             session['user_role'] = user.role
+            flash('🎉 ¡Tu negocio ha sido registrado! Bienvenido a Comuni IA.', 'success')
 
             return redirect(url_for('profile', id=business.id))
         except Exception as e:
             db.session.rollback()
-            return render_template('join.html', error=f"Error al registrar: {str(e)}",
-                                 form=request.form, categories=categories)
+            return render_template('join.html', error=f"Error al registrar: {str(e)}", categories=categories, form_data=request.form)
 
-    return render_template('join.html', categories=categories)
-
-@app.route('/api/csrf-token', methods=['GET'])
-def get_csrf_token():
-    from flask_wtf.csrf import generate_csrf
-    return jsonify({'csrf_token': generate_csrf()})
+    return render_template('join.html', categories=categories, form_data={})
 
 @app.route('/register_client', methods=['GET', 'POST'], strict_slashes=False)
 def register_client():
     if 'user_id' in session:
+        flash('⚠️ Ya has iniciado sesión. No puedes registrar una nueva cuenta de cliente.', 'warning')
         return redirect(url_for('home'))
 
     if request.method == 'POST':
@@ -319,6 +320,7 @@ def register_client():
         session['user_id'] = user.id
         session['user_email'] = user.email
         session['user_role'] = user.role
+        flash('✅ ¡Registro exitoso! Bienvenido a Comuni IA.', 'success')
         return redirect(url_for('home'))
 
     return render_template('register_client.html')
@@ -353,10 +355,6 @@ def home():
                          search_query=search_query,
                          category_filter=category_filter)
 
-@app.route('/register', methods=['GET', 'POST'], strict_slashes=False)
-def register():
-    return redirect(url_for('join'))
-
 @app.route('/profile/<int:id>', strict_slashes=False)
 def profile(id):
     business = Business.query.get_or_404(id)
@@ -367,24 +365,23 @@ def profile(id):
     
     is_owner = False
     is_favorited = False
-    # --- INICIO LÓGICA DE CONTEO DE VISITAS ---
+    
+    # Lógica de conteo de visitas y estado de favorito/dueño
     if 'user_id' in session:
         user = User.query.get(session['user_id'])
         if user:
             if user.business_id == id:
                 is_owner = True
-            else:
-                # Contar la visita solo si el usuario no es el dueño
-                # y si no ha visitado antes este perfil.
-                if business not in user.viewed_businesses:
-                    user.viewed_businesses.append(business)
-                    db.session.commit()
-
-            # Comprobar si este negocio está en la lista de favoritos del usuario
+            
             if business in user.favorite_businesses:
                 is_favorited = True
+            
+            # Contar la visita solo si el usuario no es el dueño y no ha visitado antes
+            if not is_owner and business not in user.viewed_businesses:
+                user.viewed_businesses.append(business)
+                db.session.commit()
+
     view_count = len(business.viewed_by)
-    # --- FIN LÓGICA DE CONTEO DE VISITAS ---
     return render_template('profile.html', business=business, products=products,
                          reviews=[r.to_dict() for r in reviews_query],
                          avg_rating=round(avg_rating, 1), view_count=view_count,
@@ -476,6 +473,12 @@ def ai_suggestions(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def format_gemini_response(text):
+    """Convierte Markdown simple (negritas) a HTML."""
+    import re
+    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+    return text
+
 @app.route('/api/chat', methods=['POST'], strict_slashes=False)
 def chat():
     if not GEMINI_MODEL:
@@ -547,7 +550,7 @@ def chat():
         # Usamos el nuevo prompt dinámico
         resp = GEMINI_MODEL.generate_content(final_prompt)
         text = resp.text.strip() if hasattr(resp, "text") else "No tengo una respuesta en este momento."
-        return jsonify({"reply": text})
+        return jsonify({"reply": format_gemini_response(text)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
