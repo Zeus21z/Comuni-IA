@@ -425,8 +425,10 @@
 
 {% block scripts %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
-  const businessId = document.body.dataset.businessId;
-  const isOwner = document.body.dataset.isOwner === 'true';
+  // --- CORRECCIÓN: Leer datos desde el contenedor correcto ---
+  const profileContainer = document.querySelector('[data-business-id]');
+  const businessId = profileContainer.dataset.businessId;
+  const isOwner = profileContainer.dataset.isOwner === 'true';
 
   // Manejador del efecto flip
   document.querySelectorAll('.flip-button').forEach(btn => {
@@ -550,8 +552,8 @@
   }
 
   // --- MAPA LEAFLET ---
-  const lat = document.body.dataset.latitude ? parseFloat(document.body.dataset.latitude) : null;
-  const lon = document.body.dataset.longitude ? parseFloat(document.body.dataset.longitude) : null;
+  const lat = profileContainer.dataset.latitude ? parseFloat(profileContainer.dataset.latitude) : null;
+  const lon = profileContainer.dataset.longitude ? parseFloat(profileContainer.dataset.longitude) : null;
   const defaultLat = -17.7833; // Santa Cruz
   const defaultLon = -63.1833;
 
