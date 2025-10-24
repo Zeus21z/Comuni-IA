@@ -1,74 +1,199 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Admin Dashboard — Comuni IA</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet"/>
-  <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet"/>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-</head>
-<body>
-<!-- NAVBAR (SIMILAR A INDEX) -->
-<nav class="navbar navbar-expand-lg fixed-top">
-  <div class="container">
-    <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
-      <i class="bi bi-chat-dots text-primary me-2"></i>Comuni IA - Admin
-    </a>
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav ms-auto">
-        <li class="nav-item"><a href="{{ url_for('logout') }}" class="btn btn-outline-primary ms-2">Salir</a></li>
-      </ul>
-    </div>
-  </div>
-</nav>
+{% extends "layout.html" %}
 
-<main class="container py-5 mt-5">
-  <h2 class="mb-4">Dashboard Admin: Gestión de Negocios</h2>
-  <div class="row g-4">
-    {% for b in businesses %}
-    <div class="col-md-6">
-      <div class="card shadow-sm rounded-4">
-        <div class="card-body">
-          <h5>{{ b.name }} (ID: {{ b.id }})</h5>
-          <p class="text-muted">{{ b.description[:100] }}...</p>
-          <button class="btn btn-danger btn-sm delete-business" data-id="{{ b.id }}">
-            <i class="bi bi-trash"></i> Eliminar
-          </button>
+{% block title %}Panel de Administrador{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2 fw-bold">Panel de Administrador</h1>
+        <span class="badge bg-primary-soft text-primary fs-6">Rol: Admin</span>
+    </div>
+
+    <!-- SECCIÓN DE ESTADÍSTICAS -->
+    <section class="mb-5">
+        <h2 class="h4 mb-3">Estadísticas Generales</h2>
+        <div class="row g-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="card text-center h-100 shadow-sm">
+                    <div class="card-body">
+                        <i class="bi bi-people-fill display-4 text-primary"></i>
+                        <h3 class="card-title fs-1 fw-bold mt-2">{{ stats.total_users }}</h3>
+                        <p class="card-text text-muted">Usuarios Totales</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card text-center h-100 shadow-sm">
+                    <div class="card-body">
+                        <i class="bi bi-shop display-4 text-success"></i>
+                        <h3 class="card-title fs-1 fw-bold mt-2">{{ stats.total_businesses }}</h3>
+                        <p class="card-text text-muted">Negocios Registrados</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card text-center h-100 shadow-sm">
+                    <div class="card-body">
+                        <i class="bi bi-box-seam display-4 text-info"></i>
+                        <h3 class="card-title fs-1 fw-bold mt-2">{{ stats.total_products }}</h3>
+                        <p class="card-text text-muted">Productos Publicados</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card text-center h-100 shadow-sm">
+                    <div class="card-body">
+                        <i class="bi bi-star-half display-4 text-warning"></i>
+                        <h3 class="card-title fs-1 fw-bold mt-2">{{ stats.total_reviews }}</h3>
+                        <p class="card-text text-muted">Reseñas Recibidas</p>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-    {% else %}
-    <div class="col-12 text-center py-5">
-      <p>No hay negocios.</p>
-    </div>
-    {% endfor %}
-  </div>
-</main>
+    </section>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- GESTIÓN DE USUARIOS Y NEGOCIOS -->
+    <div class="row g-5">
+        <!-- Columna de Gestión de Usuarios -->
+        <div class="col-lg-6">
+            <section>
+                <h2 class="h4 mb-3">Gestión de Usuarios</h2>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Registro</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in all_users %}
+                            <tr>
+                                <td>{{ user.email }}</td>
+                                <td>
+                                    {% if user.role == 'admin' %}
+                                        <span class="badge bg-danger">Admin</span>
+                                    {% elif user.role == 'user' %}
+                                        <span class="badge bg-success">Dueño</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Cliente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if user.created_at %}
+                                        {{ user.created_at.strftime('%d/%m/%Y') }}
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if user.role != 'admin' %}
+                                    <button class="btn btn-sm btn-outline-danger" 
+                                            onclick="deleteUser('{{ url_for('delete_user', user_id=user.id) }}', {{ user.email | tojson }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center">No hay usuarios registrados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- Columna de Gestión de Negocios -->
+        <div class="col-lg-6">
+            <section>
+                <h2 class="h4 mb-3">Gestión de Negocios</h2>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Negocio</th>
+                                <th>Dueño</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for business, owner_email in businesses_with_owners %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('profile', id=business.id) }}" class="text-decoration-none">{{ business.name }}</a>
+                                </td>
+                                <td class="text-muted small">{{ owner_email or 'Sin dueño asignado' }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger" 
+                                            onclick="deleteBusiness('{{ url_for('delete_business', id=business.id) }}', {{ business.name | tojson }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center">No hay negocios registrados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
 <script>
-// Eliminar con confirmación
-document.querySelectorAll('.delete-business').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    const id = e.target.dataset.id;
-    if (!confirm(`¿Seguro que quieres eliminar el negocio ID ${id}? Esto es irreversible.`)) return;
-    
-    try {
-      const resp = await fetch(`/admin/delete_business/${id}`, { method: 'POST' });
-      const data = await resp.json();
-      if (data.success) {
-        alert('Negocio eliminado.');
-        location.reload();
-      } else {
-        alert('Error: ' + data.error);
-      }
-    } catch (e) {
-      alert('Error de conexión.');
+function deleteBusiness(url, name) {
+    if (confirm(`¿Estás seguro de que quieres eliminar el negocio "${name}"? El usuario dueño no será eliminado, solo se desvinculará del negocio.`)) {
+        fetch(url, { method: 'POST' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error del servidor: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error al eliminar el negocio: ' + (data.error || 'Error desconocido.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error en fetch:', error);
+                alert('Ha ocurrido un error de comunicación: ' + error.message);
+            });
     }
-  });
-});
+}
+
+function deleteUser(url, email) {
+    const message = `¿Estás seguro de que quieres eliminar al usuario "${email}"?\n\nSi este usuario es dueño de un negocio, el negocio también será eliminado. Esta acción no se puede deshacer.`;
+    if (confirm(message)) {
+        fetch(url, { method: 'POST' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error del servidor: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error al eliminar el usuario: ' + (data.error || 'Error desconocido.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error en fetch:', error);
+                alert('Ha ocurrido un error de comunicación: ' + error.message);
+            });
+    }
+}
 </script>
-</body>
-</html>
+{% endblock %}

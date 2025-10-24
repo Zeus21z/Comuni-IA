@@ -187,6 +187,7 @@ def login():
             session['user_id'] = user.id
             session['user_email'] = user.email
             session['user_role'] = user.role
+            session['business_id'] = user.business_id # Añadir esta línea para guardar el business_id en la sesión
             flash(f'✅ ¡Bienvenido de vuelta, {user.email}!', 'success')
             
             next_page = request.args.get('next')
@@ -742,8 +743,24 @@ def get_reviews(business_id):
 @app.route('/admin/dashboard', strict_slashes=False)
 @admin_required
 def admin_dashboard():
-    businesses = Business.query.all()
-    return render_template('admin_dashboard.html', businesses=businesses)
+    # Estadísticas para el dashboard
+    stats = {
+        'total_users': User.query.count(),
+        'total_businesses': Business.query.count(),
+        'total_products': Product.query.count(),
+        'total_reviews': Review.query.count()
+    }
+    
+    # Lista de todos los negocios con el email del dueño
+    businesses_with_owners = db.session.query(Business, User.email).outerjoin(User, Business.id == User.business_id).order_by(Business.id.desc()).all()
+    
+    # Lista de todos los usuarios
+    all_users = User.query.order_by(User.created_at.desc()).all()
+
+    return render_template('admin_dashboard.html', 
+                           stats=stats, 
+                           businesses_with_owners=businesses_with_owners,
+                           all_users=all_users)
 
 @app.route('/admin/delete_business/<int:id>', methods=['POST'], strict_slashes=False)
 @admin_required
@@ -752,11 +769,37 @@ def delete_business(id):
     user = User.query.filter_by(business_id=id).first()
     
     try:
+        # Desvincular el negocio del usuario, pero no borrar el usuario.
+        # El usuario podrá registrar otro negocio o seguir como cliente.
         if user:
-            db.session.delete(user)
+            user.business_id = None
         db.session.delete(business)
         db.session.commit()
-        return jsonify({"success": True})
+        return jsonify({"success": True, "message": f"Negocio {business.name} eliminado."})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'], strict_slashes=False)
+@admin_required
+def delete_user(user_id):
+    """
+    Elimina un usuario por su ID. Si el usuario es dueño de un negocio,
+    también elimina el negocio asociado.
+    """
+    user = User.query.get_or_404(user_id)
+    
+    try:
+        # Si el usuario tiene un negocio, también lo eliminamos
+        if user.business_id:
+            business = Business.query.get(user.business_id)
+            if business:
+                db.session.delete(business)
+        
+        # Finalmente, eliminamos al usuario
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"success": True, "message": f"Usuario {user.email} eliminado."})
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
