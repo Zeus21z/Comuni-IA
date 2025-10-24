@@ -3,6 +3,11 @@ Script para poblar la base de datos con 2 negocios por categoría
 Incluye productos específicos para cada tipo de negocio
 """
 import os
+import sys
+
+# --- MEJORA: Añadir la ruta del proyecto al path de Python ---
+# Esto asegura que el script siempre pueda encontrar el módulo 'app'
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from app import app, db, User, Business, Product
 from werkzeug.security import generate_password_hash
 

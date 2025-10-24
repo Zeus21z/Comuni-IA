@@ -2,8 +2,10 @@
 Script para arreglar el bug de registro
 """
 import sys
-sys.path.insert(0, 'D:\\Comunianew')
+import os
 
+# --- MEJORA: Reemplazar ruta fija por una dinámica ---
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from app import app, db, User, Business
 
 # Arreglar usuarios sin business_id vinculado

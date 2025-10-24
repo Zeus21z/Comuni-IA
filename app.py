@@ -51,6 +51,7 @@ class Business(db.Model):
     location = db.Column(db.String(160), nullable=False, default="Santa Cruz, Bolivia")
     category = db.Column(db.String(100), nullable=False, default="Servicios")
     phone = db.Column(db.String(20), nullable=True)
+    nit = db.Column(db.String(20), nullable=True)  # NUEVO CAMPO
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
     email = db.Column(db.String(120), nullable=True)
@@ -93,6 +94,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     business_id = db.Column(db.Integer, db.ForeignKey('businesses.id'), nullable=True)
+    ci = db.Column(db.String(20), nullable=True)  # NUEVO CAMPO
     role = db.Column(db.String(20), default='user')
     created_at = db.Column(db.DateTime, default=db.func.now())
     # La relación a 'favorite_businesses' se define a través del backref en Business.favorited_by
@@ -106,14 +108,24 @@ class User(db.Model):
 with app.app_context():
     db.create_all()
     # En bases existentes la tabla 'businesses' puede no tener columnas new (latitude/longitude).
-    # Comprobamos y añadimos columnas faltantes con ALTER TABLE (SQLite soporta ADD COLUMN simple).
+    # Comprobamos y añadimos columnas faltantes con ALTER TABLE.
     try:
-        tbl_info = db.session.execute(text("PRAGMA table_info(businesses) ")).fetchall()
-        existing_cols = [row[1] for row in tbl_info]
-        if 'latitude' not in existing_cols:
+        # Para la tabla 'businesses'
+        business_cols_info = db.session.execute(text("PRAGMA table_info(businesses)")).fetchall()
+        business_cols = [row[1] for row in business_cols_info]
+        if 'latitude' not in business_cols:
             db.session.execute(text("ALTER TABLE businesses ADD COLUMN latitude REAL"))
-        if 'longitude' not in existing_cols:
+        if 'longitude' not in business_cols:
             db.session.execute(text("ALTER TABLE businesses ADD COLUMN longitude REAL"))
+        if 'nit' not in business_cols:
+            db.session.execute(text("ALTER TABLE businesses ADD COLUMN nit VARCHAR(20)"))
+
+        # Para la tabla 'users'
+        user_cols_info = db.session.execute(text("PRAGMA table_info(users)")).fetchall()
+        user_cols = [row[1] for row in user_cols_info]
+        if 'ci' not in user_cols:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN ci VARCHAR(20)"))
+
         db.session.commit()
     except Exception as e:
         # No detener el arranque si falla esta corrección automática; informar en consola.
@@ -216,6 +228,7 @@ def join():
         email = request.form.get('email', '').strip()
         password = request.form.get('password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
+        ci = request.form.get('ci', '').strip() # NUEVO CAMPO
         
         # Datos de business
         name = request.form.get('name', '').strip()
@@ -226,6 +239,7 @@ def join():
         business_email = request.form.get('business_email', '').strip()
         whatsapp = request.form.get('whatsapp', '').strip()
         latitude = request.form.get('latitude')
+        nit = request.form.get('nit', '').strip() # NUEVO CAMPO
         longitude = request.form.get('longitude')
 
         # Validaciones user
@@ -254,13 +268,13 @@ def join():
                 logo_path = images.save(logo)
 
             # 2. Crear usuario y negocio en una transacción
-            user = User(email=email, role='user')
+            user = User(email=email, role='user', ci=ci) # Añadido 'ci'
             user.set_password(password)
             db.session.add(user)
 
             business = Business(name=name, description=description, logo=logo_path,
                               location=location, category=category, phone=phone,
-                              email=business_email, whatsapp=whatsapp,
+                              email=business_email, whatsapp=whatsapp, nit=nit, # Añadido 'nit'
                               latitude=float(latitude) if latitude else None,
                               longitude=float(longitude) if longitude else None)
             db.session.add(business)
@@ -489,70 +503,131 @@ def chat():
     if not user_msg:
         return jsonify({"error": "Falta 'message'"}), 400
 
-    # --- INICIO DE LA MEJORA DEL CHATBOT ---
+    # --- LIMPIEZA Y PREPARACIÓN DEL MENSAJE ---
     import re
     import unicodedata
 
-    # 1. Limpiar el mensaje del usuario
     cleaned_msg = user_msg.lower()
     cleaned_msg = re.sub(r'[^\w\s]', '', cleaned_msg)
-    cleaned_msg = ''.join(c for c in unicodedata.normalize('NFD', cleaned_msg) if unicodedata.category(c) != 'Mn')
+    cleaned_msg = ''.join(
+        c for c in unicodedata.normalize('NFD', cleaned_msg)
+        if unicodedata.category(c) != 'Mn'
+    )
 
-    # 2. Determinar la intención del usuario
-    # Palabras clave que indican una búsqueda de negocio.
-    search_keywords = ['busco', 'recomienda', 'necesito', 'donde hay', 'quiero', 'encuentra', 'negocio', 'tienda', 'servicio', 'comida', 'ropa']
+    # --- DETECCIÓN DE INTENCIÓN ---
+    search_keywords = [
+        'busco', 'recomienda', 'necesito', 'donde hay', 'quiero', 'encuentra',
+        'negocio', 'tienda', 'servicio', 'comida', 'ropa', 'restaurante',
+        'menu', 'carta', 'producto'
+    ]
     is_search_intent = any(keyword in cleaned_msg for keyword in search_keywords)
+    is_menu_intent = 'menu' in cleaned_msg or 'carta' in cleaned_msg
     is_short_message = len(cleaned_msg.split()) <= 2
 
-    relevant_businesses = []
-    business_context_str = "No se ha realizado una búsqueda de negocios."
+    # --- VARIABLES PARA RESULTADOS ---
+    businesses_found = []
+    response_context = ""
 
-    # 3. Si la intención es buscar (o no es un mensaje corto), buscar en la BD
-    if is_search_intent or not is_short_message:
-        search_terms = cleaned_msg.split()
+    # --- BÚSQUEDA EN BASE DE DATOS ---
+    search_terms = [t for t in cleaned_msg.split() if len(t) > 2]
+
+    if is_search_intent and not is_menu_intent:
+        # Buscar coincidencias en negocios
         filters = [
             db.or_(
                 Business.name.ilike(f'%{term}%'),
                 Business.description.ilike(f'%{term}%'),
                 Business.category.ilike(f'%{term}%')
-            ) for term in search_terms if len(term) > 2
+            ) for term in search_terms
         ]
-        
         if filters:
-            found_businesses = Business.query.filter(db.or_(*filters)).limit(5).all()
-            for b in found_businesses:
-                relevant_businesses.append(f"- Nombre: {b.name}, Categoría: {b.category}, Descripción: {b.description[:150]}...")
-        
-        business_context_str = "\n".join(relevant_businesses) if relevant_businesses else "No se encontraron negocios relevantes en el directorio para esta búsqueda."
+            businesses_found = Business.query.filter(db.or_(*filters)).limit(5).all()
 
-    # 4. Construir el prompt final para la IA
-    if is_search_intent or not is_short_message:
-        # Prompt enfocado en búsqueda
-        final_prompt = (
-            "Eres un asistente virtual para 'Comuni IA', un directorio de negocios locales en Santa Cruz, Bolivia. "
-            "Tu objetivo es ayudar a los usuarios a encontrar el negocio que necesitan. "
-            "Basado en la pregunta del usuario y la lista de negocios que te proporciono, recomienda la mejor opción y explica por qué. "
-            "Si ningún negocio parece adecuado, informa al usuario que no encontraste una coincidencia y anímale a explorar el directorio manualmente.\n\n"
-            f"LISTA DE NEGOCIOS ENCONTRADOS:\n{business_context_str}\n\n"
-            f"PREGUNTA DEL USUARIO:\n'{user_msg}'\n\n"
-            "Asistente:"
-        )
+        # Buscar coincidencias también en productos
+        product_filters = [
+            db.or_(
+                Product.name.ilike(f"%{term}%"),
+                Product.description.ilike(f"%{term}%")
+            ) for term in search_terms
+        ]
+        if product_filters:
+            product_results = Product.query.filter(db.or_(*product_filters)).limit(5).all()
+            for p in product_results:
+                if p.business not in businesses_found:
+                    businesses_found.append(p.business)
+
+        # Armar el contexto de respuesta
+        if not businesses_found:
+            response_context = "No se encontraron negocios que coincidan con tu búsqueda."
+        else:
+            response_context = "Encontré estos lugares relacionados:\n\n"
+            for b in businesses_found:
+                response_context += f"🏪 <strong>{b.name}</strong> — {b.category}\n"
+                if b.description:
+                    response_context += f"{b.description[:120]}...\n"
+                response_context += f"📍 <a href='/profile/{b.id}'>Ver perfil</a>\n"
+
+                productos = Product.query.filter_by(business_id=b.id).limit(3).all()
+                if productos:
+                    response_context += "🍽️ Menú destacado:\n"
+                    for p in productos:
+                        response_context += f"• {p.name} — {p.price:.2f} Bs\n"
+                    response_context += "\n"
+                else:
+                    response_context += "\n"
+
+    elif is_menu_intent:
+        # --- SI PIDE UN MENÚ DIRECTO ---
+        name_match = re.search(r'menu (de|del)? ([\w\s]+)', cleaned_msg)
+        if name_match:
+            business_name = name_match.group(2).strip()
+            business = Business.query.filter(Business.name.ilike(f"%{business_name}%")).first()
+            if business:
+                productos = Product.query.filter_by(business_id=business.id).all()
+                if productos:
+                    response_context = f"🍽️ Menú de {business.name}:\n"
+                    for p in productos:
+                        response_context += f"• {p.name} — {p.price:.2f} Bs\n"
+                    response_context += f"\n📍 <a href='/profile/{business.id}'>Ver más del negocio</a>"
+                else:
+                    response_context = f"{business.name} no tiene productos registrados todavía."
+            else:
+                response_context = f"No encontré un negocio llamado '{business_name}'."
+        else:
+            response_context = "Por favor, dime el nombre del negocio del que quieres ver el menú."
+
     else:
-        # Prompt para conversación general
+        # --- CONVERSACIÓN GENERAL ---
         final_prompt = (
-            "Eres un asistente virtual amigable y servicial para 'Comuni IA', un directorio de negocios locales. "
-            "Estás teniendo una conversación general. Responde de forma breve y natural. Si te preguntan qué puedes hacer, explica que puedes ayudar a encontrar negocios o dar consejos de marketing.\n\n"
+            "Eres un asistente virtual amigable y servicial para 'Comuni IA', "
+            "un directorio de negocios locales en Santa Cruz, Bolivia. "
+            "Responde de forma breve y natural. "
+            "Si te preguntan qué puedes hacer, explica que puedes ayudar a encontrar negocios, productos o menús.\n\n"
             f"Usuario: {user_msg}\nAsistente:"
         )
-    # --- FIN DE LA MEJORA DEL CHATBOT ---
+        try:
+            resp = GEMINI_MODEL.generate_content(final_prompt)
+            text = resp.text.strip() if hasattr(resp, "text") else "No tengo una respuesta ahora."
+            return jsonify({"reply": format_gemini_response(text)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # --- PROMPT FINAL PARA GEMINI ---
+    final_prompt = (
+        "Eres el asistente de 'Comuni IA', un directorio de negocios locales en Santa Cruz, Bolivia. "
+        "Responde de forma amable y útil según la búsqueda del usuario. "
+        "Muestra los negocios o menús encontrados de manera clara.\n\n"
+        f"Consulta del usuario: {user_msg}\n\n"
+        f"Contexto encontrado:\n{response_context}\n\n"
+        "Redacta una respuesta amigable para el usuario."
+    )
 
     try:
-        # Usamos el nuevo prompt dinámico
         resp = GEMINI_MODEL.generate_content(final_prompt)
-        text = resp.text.strip() if hasattr(resp, "text") else "No tengo una respuesta en este momento."
+        text = resp.text.strip() if hasattr(resp, "text") else response_context
         return jsonify({"reply": format_gemini_response(text)})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return jsonify({"reply": format_gemini_response(response_context)})
 
 # RUTAS DE PRODUCTOS (ACTUALIZADO: subida de imagen)
 @app.route('/api/products/<int:business_id>', methods=['POST'], strict_slashes=False)

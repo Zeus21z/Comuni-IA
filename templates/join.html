@@ -41,6 +41,11 @@
                        placeholder="Repite contraseña" required minlength="6">
               </div>
             </div>
+            <div class="mb-4">
+              <label for="ci" class="form-label fw-bold"><i class="bi bi-person-badge text-primary me-2"></i>Cédula de Identidad (CI)</label>
+              <input type="text" class="form-control rounded-pill" id="ci" name="ci" value="{{ form_data.get('ci', '') }}" placeholder="Ej: 1234567 SC" required>
+              <small class="text-muted">Necesario para vincularte como dueño del negocio.</small>
+            </div>
 
             <!-- SECCIÓN NEGOCIO -->
             <h5 class="mb-3"><i class="bi bi-shop text-primary me-2"></i>Tu Negocio</h5>
@@ -66,6 +71,10 @@
                 <option value="{{ cat }}" {% if form_data.get('category') == cat %}selected{% endif %}>{{ cat }}</option>
                 {% endfor %}
               </select>
+            </div>
+            <div class="mb-3">
+              <label for="nit" class="form-label fw-bold"><i class="bi bi-file-earmark-text text-primary me-2"></i>NIT (Opcional)</label>
+              <input type="text" class="form-control rounded-pill" id="nit" name="nit" value="{{ form_data.get('nit', '') }}" placeholder="Ej: 123456789012">
             </div>
             <div class="mb-3">
               <label class="form-label fw-bold"><i class="bi bi-geo-alt text-primary me-2"></i>Ubicación</label>
