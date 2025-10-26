@@ -744,7 +744,7 @@ def get_reviews(business_id):
         "total": len(reviews)
     })
 
-# RUTAS ADMIN (SIN CAMBIOS)
+# RUTAS ADMIN
 @app.route('/admin/dashboard', strict_slashes=False)
 @admin_required
 def admin_dashboard():
@@ -821,6 +821,117 @@ def toggle_user_status(user_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+# ============================================
+# NUEVAS RUTAS DE ELIMINACIÓN PERMANENTE
+# ============================================
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'], strict_slashes=False)
+@admin_required
+def delete_user(user_id):
+    """
+    Elimina permanentemente un usuario y todos sus datos relacionados.
+    Esto incluye: el usuario, sus negocios, productos de sus negocios, 
+    y reseñas de sus negocios.
+    """
+    user = User.query.get_or_404(user_id)
+    
+    # No permitir eliminar a otros administradores
+    if user.role == 'admin':
+        return jsonify({'success': False, 'error': 'No se puede eliminar a un administrador'}), 403
+    
+    try:
+        # 1. Si el usuario tiene un negocio asociado
+        if user.business_id:
+            business = Business.query.get(user.business_id)
+            if business:
+                # Eliminar productos del negocio
+                Product.query.filter_by(business_id=business.id).delete()
+                
+                # Eliminar reseñas del negocio
+                Review.query.filter_by(business_id=business.id).delete()
+                
+                # Limpiar relaciones many-to-many
+                business.favorited_by.clear()  # Eliminar de favoritos
+                business.viewed_by.clear()      # Eliminar vistas
+                
+                # Eliminar logo si existe
+                if business.logo:
+                    try:
+                        logo_path = images.path(business.logo)
+                        if os.path.exists(logo_path):
+                            os.remove(logo_path)
+                    except Exception as e:
+                        print(f"Advertencia: No se pudo eliminar el logo: {e}")
+                
+                # Eliminar el negocio
+                db.session.delete(business)
+        
+        # 2. Eliminar reseñas hechas por el usuario (usando el email como autor)
+        Review.query.filter_by(author=user.email).delete()
+        
+        # 3. Limpiar relaciones many-to-many del usuario
+        user.favorite_businesses.clear()
+        user.viewed_businesses.clear()
+        
+        # 4. Eliminar el usuario
+        db.session.delete(user)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': f'Usuario "{user.email}" eliminado correctamente'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'Error al eliminar usuario: {str(e)}'}), 500
+
+
+@app.route('/admin/delete_business/<int:id>', methods=['POST'], strict_slashes=False)
+@admin_required
+def delete_business(id):
+    """
+    Elimina permanentemente un negocio y todos sus datos relacionados.
+    Esto incluye: productos, reseñas y relaciones con usuarios.
+    """
+    business = Business.query.get_or_404(id)
+    
+    try:
+        # 1. Eliminar productos del negocio
+        Product.query.filter_by(business_id=id).delete()
+        
+        # 2. Eliminar reseñas del negocio
+        Review.query.filter_by(business_id=id).delete()
+        
+        # 3. Desvincular al dueño del negocio (si existe)
+        owner = User.query.filter_by(business_id=id).first()
+        if owner:
+            owner.business_id = None
+        
+        # 4. Limpiar relaciones many-to-many
+        business.favorited_by.clear()  # Eliminar de favoritos de usuarios
+        business.viewed_by.clear()      # Eliminar registro de vistas
+        
+        # 5. Eliminar archivos de imagen si existen
+        if business.logo:
+            try:
+                logo_path = images.path(business.logo)
+                if os.path.exists(logo_path):
+                    os.remove(logo_path)
+            except Exception as e:
+                print(f"Advertencia: No se pudo eliminar el logo: {e}")
+        
+        # 6. Eliminar el negocio
+        db.session.delete(business)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': f'Negocio "{business.name}" eliminado correctamente'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'Error al eliminar negocio: {str(e)}'}), 500
+
+# ============================================
+# ERROR HANDLERS
+# ============================================
 
 @app.errorhandler(404)
 def not_found(e):

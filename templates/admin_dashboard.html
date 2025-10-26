@@ -97,13 +97,11 @@
                                 </td>
                                 <td>
                                     {% if user.role != 'admin' %}
-                                    <button class="btn btn-sm {{ 'btn-outline-success' if not user.is_active else 'btn-outline-danger' }}" 
-                                            onclick="toggleUserStatus('{{ url_for('toggle_user_status', user_id=user.id) }}', {{ user.email | tojson }}, {{ user.is_active | tojson }})">
-                                        {% if user.is_active %}
-                                            <i class="bi bi-person-x-fill"></i> Desactivar
-                                        {% else %}
-                                            <i class="bi bi-person-check-fill"></i> Reactivar
-                                        {% endif %}
+                                    <button class="btn btn-sm btn-danger" 
+                                            data-url="{{ url_for('delete_user', user_id=user.id) }}"
+                                            data-email="{{ user.email }}"
+                                            onclick="deleteUser(this.dataset.url, this.dataset.email)">
+                                        <i class="bi bi-trash-fill"></i> Eliminar
                                     </button>
                                     {% endif %}
                                 </td>
@@ -143,13 +141,11 @@
                                 </td>
                                 <td class="text-muted small">{{ owner_email or 'Sin dueño asignado' }}</td>
                                 <td>
-                                    <button class="btn btn-sm {{ 'btn-outline-success' if not business.is_active else 'btn-outline-danger' }}" 
-                                            onclick="toggleBusinessStatus('{{ url_for('toggle_business_status', id=business.id) }}', {{ business.name | tojson }}, {{ business.is_active | tojson }})">
-                                        {% if business.is_active %}
-                                            <i class="bi bi-shop-window"></i> Desactivar
-                                        {% else %}
-                                            <i class="bi bi-arrow-clockwise"></i> Reactivar
-                                        {% endif %}
+                                    <button class="btn btn-sm btn-danger" 
+                                            data-url="{{ url_for('delete_business', id=business.id) }}"
+                                            data-name="{{ business.name }}"
+                                            onclick="deleteBusiness(this.dataset.url, this.dataset.name)">
+                                        <i class="bi bi-trash-fill"></i> Eliminar
                                     </button>
                                 </td>
                             </tr>
@@ -167,7 +163,7 @@
 </div>
 
 <script>
-// Manejo centralizado de respuestas para ambas funciones
+// Manejo centralizado de respuestas
 async function handleResponse(response, action) {
     try {
         const text = await response.text();
@@ -175,7 +171,7 @@ async function handleResponse(response, action) {
         try {
             data = JSON.parse(text);
         } catch {
-            data = text; // Si no es JSON, usar texto
+            data = text;
         }
 
         if (!response.ok) {
@@ -187,6 +183,7 @@ async function handleResponse(response, action) {
         }
 
         if (data.success) {
+            alert(`¡${action} exitosamente!`);
             window.location.reload();
         } else {
             alert(`Error al ${action}: ` + (data.error || 'Error desconocido.'));
@@ -197,26 +194,42 @@ async function handleResponse(response, action) {
     }
 }
 
-function toggleBusinessStatus(url, name, isActive) {
-    const action = isActive ? 'desactivar' : 'reactivar';
-    const message = `¿Estás seguro de que quieres ${action} el negocio "${name}"?`;
-    if (confirm(message)) {
+function deleteBusiness(url, name) {
+    const message = `⚠️ ADVERTENCIA: ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE el negocio "${name}"?\n\n` +
+                   `Esta acción:\n` +
+                   `• Eliminará el negocio completamente\n` +
+                   `• Eliminará todos sus productos\n` +
+                   `• Eliminará todas sus reseñas\n` +
+                   `• NO SE PUEDE DESHACER\n\n` +
+                   `Escribe "ELIMINAR" para confirmar.`;
+    
+    const confirmation = prompt(message);
+    
+    if (confirmation === 'ELIMINAR') {
         fetch(url, { method: 'POST' })
-            .then(response => handleResponse(response, `${action} el negocio`));
+            .then(response => handleResponse(response, 'Negocio eliminado'));
+    } else if (confirmation !== null) {
+        alert('Eliminación cancelada. Debes escribir exactamente "ELIMINAR" para confirmar.');
     }
 }
 
-function toggleUserStatus(url, email, isActive) {
-    const action = isActive ? 'desactivar' : 'reactivar';
-    let message = `¿Estás seguro de que quieres ${action} al usuario "${email}"?`;
-
-    if (isActive) {
-        message += `\n\nSi este usuario es dueño de un negocio, el negocio también será desactivado.`;
-    }
-
-    if (confirm(message)) {
+function deleteUser(url, email) {
+    const message = `⚠️ ADVERTENCIA: ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE al usuario "${email}"?\n\n` +
+                   `Esta acción:\n` +
+                   `• Eliminará el usuario completamente\n` +
+                   `• Eliminará todos sus negocios (si tiene)\n` +
+                   `• Eliminará todos los productos de sus negocios\n` +
+                   `• Eliminará todas las reseñas relacionadas\n` +
+                   `• NO SE PUEDE DESHACER\n\n` +
+                   `Escribe "ELIMINAR" para confirmar.`;
+    
+    const confirmation = prompt(message);
+    
+    if (confirmation === 'ELIMINAR') {
         fetch(url, { method: 'POST' })
-            .then(response => handleResponse(response, `${action} el usuario`));
+            .then(response => handleResponse(response, 'Usuario eliminado'));
+    } else if (confirmation !== null) {
+        alert('Eliminación cancelada. Debes escribir exactamente "ELIMINAR" para confirmar.');
     }
 }
 </script>
