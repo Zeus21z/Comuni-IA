@@ -70,13 +70,20 @@
                         </thead>
                         <tbody>
                             {% for user in all_users %}
-                            <tr>
-                                <td>{{ user.email }}</td>
+                            <tr class="{{ 'table-secondary text-muted' if not user.is_active }}">
+                                <td>
+                                    {{ user.email }}
+                                    {% if not user.is_active %}
+                                        <span class="badge bg-dark">Inactivo</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if user.role == 'admin' %}
                                         <span class="badge bg-danger">Admin</span>
                                     {% elif user.role == 'user' %}
                                         <span class="badge bg-success">Dueño</span>
+                                    {% elif user.role == 'client' %}
+                                        <span class="badge bg-info text-dark">Cliente</span>
                                     {% else %}
                                         <span class="badge bg-secondary">Cliente</span>
                                     {% endif %}
@@ -90,9 +97,13 @@
                                 </td>
                                 <td>
                                     {% if user.role != 'admin' %}
-                                    <button class="btn btn-sm btn-outline-danger" 
-                                            onclick="deleteUser('{{ url_for('delete_user', user_id=user.id) }}', {{ user.email | tojson }})">
-                                        <i class="bi bi-trash"></i>
+                                    <button class="btn btn-sm {{ 'btn-outline-success' if not user.is_active else 'btn-outline-danger' }}" 
+                                            onclick="toggleUserStatus('{{ url_for('toggle_user_status', user_id=user.id) }}', {{ user.email | tojson }}, {{ user.is_active | tojson }})">
+                                        {% if user.is_active %}
+                                            <i class="bi bi-person-x-fill"></i> Desactivar
+                                        {% else %}
+                                            <i class="bi bi-person-check-fill"></i> Reactivar
+                                        {% endif %}
                                     </button>
                                     {% endif %}
                                 </td>
@@ -123,15 +134,22 @@
                         </thead>
                         <tbody>
                             {% for business, owner_email in businesses_with_owners %}
-                            <tr>
+                            <tr class="{{ 'table-secondary text-muted' if not business.is_active }}">
                                 <td>
                                     <a href="{{ url_for('profile', id=business.id) }}" class="text-decoration-none">{{ business.name }}</a>
+                                    {% if not business.is_active %}
+                                        <span class="badge bg-dark">Inactivo</span>
+                                    {% endif %}
                                 </td>
                                 <td class="text-muted small">{{ owner_email or 'Sin dueño asignado' }}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-danger" 
-                                            onclick="deleteBusiness('{{ url_for('delete_business', id=business.id) }}', {{ business.name | tojson }})">
-                                        <i class="bi bi-trash"></i>
+                                    <button class="btn btn-sm {{ 'btn-outline-success' if not business.is_active else 'btn-outline-danger' }}" 
+                                            onclick="toggleBusinessStatus('{{ url_for('toggle_business_status', id=business.id) }}', {{ business.name | tojson }}, {{ business.is_active | tojson }})">
+                                        {% if business.is_active %}
+                                            <i class="bi bi-shop-window"></i> Desactivar
+                                        {% else %}
+                                            <i class="bi bi-arrow-clockwise"></i> Reactivar
+                                        {% endif %}
                                     </button>
                                 </td>
                             </tr>
@@ -149,50 +167,56 @@
 </div>
 
 <script>
-function deleteBusiness(url, name) {
-    if (confirm(`¿Estás seguro de que quieres eliminar el negocio "${name}"? El usuario dueño no será eliminado, solo se desvinculará del negocio.`)) {
-        fetch(url, { method: 'POST' })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Error del servidor: ${response.status} ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    window.location.reload();
-                } else {
-                    alert('Error al eliminar el negocio: ' + (data.error || 'Error desconocido.'));
-                }
-            })
-            .catch(error => {
-                console.error('Error en fetch:', error);
-                alert('Ha ocurrido un error de comunicación: ' + error.message);
-            });
+// Manejo centralizado de respuestas para ambas funciones
+async function handleResponse(response, action) {
+    try {
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            data = text; // Si no es JSON, usar texto
+        }
+
+        if (!response.ok) {
+            const errorMessage =
+                (data && data.error) ||
+                (typeof data === 'string' ? data : '') ||
+                `Error del servidor (${response.status})`;
+            throw new Error(errorMessage);
+        }
+
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(`Error al ${action}: ` + (data.error || 'Error desconocido.'));
+        }
+    } catch (error) {
+        console.error('Error en fetch:', error);
+        alert('Ha ocurrido un error: ' + error.message);
     }
 }
 
-function deleteUser(url, email) {
-    const message = `¿Estás seguro de que quieres eliminar al usuario "${email}"?\n\nSi este usuario es dueño de un negocio, el negocio también será eliminado. Esta acción no se puede deshacer.`;
+function toggleBusinessStatus(url, name, isActive) {
+    const action = isActive ? 'desactivar' : 'reactivar';
+    const message = `¿Estás seguro de que quieres ${action} el negocio "${name}"?`;
     if (confirm(message)) {
         fetch(url, { method: 'POST' })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Error del servidor: ${response.status} ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    window.location.reload();
-                } else {
-                    alert('Error al eliminar el usuario: ' + (data.error || 'Error desconocido.'));
-                }
-            })
-            .catch(error => {
-                console.error('Error en fetch:', error);
-                alert('Ha ocurrido un error de comunicación: ' + error.message);
-            });
+            .then(response => handleResponse(response, `${action} el negocio`));
+    }
+}
+
+function toggleUserStatus(url, email, isActive) {
+    const action = isActive ? 'desactivar' : 'reactivar';
+    let message = `¿Estás seguro de que quieres ${action} al usuario "${email}"?`;
+
+    if (isActive) {
+        message += `\n\nSi este usuario es dueño de un negocio, el negocio también será desactivado.`;
+    }
+
+    if (confirm(message)) {
+        fetch(url, { method: 'POST' })
+            .then(response => handleResponse(response, `${action} el usuario`));
     }
 }
 </script>

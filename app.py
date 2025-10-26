@@ -60,6 +60,7 @@ class Business(db.Model):
     products = db.relationship('Product', backref='business', lazy=True, cascade="all, delete-orphan")
     favorited_by = db.relationship('User', secondary=favorites, lazy='subquery', backref=db.backref('favorite_businesses', lazy=True))
     viewed_by = db.relationship('User', secondary=business_views, lazy='subquery', backref=db.backref('viewed_businesses', lazy=True))
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
 
 class Review(db.Model):
     __tablename__ = 'reviews'
@@ -97,6 +98,7 @@ class User(db.Model):
     ci = db.Column(db.String(20), nullable=True)  # NUEVO CAMPO
     role = db.Column(db.String(20), default='user')
     created_at = db.Column(db.DateTime, default=db.func.now())
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
     # La relación a 'favorite_businesses' se define a través del backref en Business.favorited_by
     
     def set_password(self, password):
@@ -359,6 +361,9 @@ def home():
     if category_filter and category_filter != 'Todas las categorías':
         query = query.filter(Business.category == category_filter)
     
+    # MEJORA: Mostrar solo negocios activos en la página principal
+    query = query.filter(Business.is_active == True)
+
     businesses = query.order_by(Business.id.desc()).all()
     
     categories = ["Gastronomía", "Moda y Ropa", "Servicios Profesionales", 
@@ -720,7 +725,7 @@ def add_review(business_id):
         rating = 0
 
     if not comment or rating < 1 or rating > 5:
-        return jsonify({"error": "El comentario y una calificación de 1 a 5 son requeridos."}), 400
+        return jsonify({"error": "El comentario y una calificación de 1 a 5 son requeridos."} ), 400
     
     review = Review(business_id=business_id, author=author, rating=rating, comment=comment)
     db.session.add(review)
@@ -762,50 +767,66 @@ def admin_dashboard():
                            businesses_with_owners=businesses_with_owners,
                            all_users=all_users)
 
-@app.route('/admin/delete_business/<int:id>', methods=['POST'], strict_slashes=False)
+@app.route('/admin/toggle_business_status/<int:id>', methods=['POST'], strict_slashes=False)
 @admin_required
-def delete_business(id):
+def toggle_business_status(id):
+    """
+    Activa o desactiva un negocio (Soft Delete).
+    Si se desactiva un negocio, el usuario dueño se desvincula.
+    """
     business = Business.query.get_or_404(id)
-    user = User.query.filter_by(business_id=id).first()
-    
+    new_status = not business.is_active
+    action = "reactivado" if new_status else "desactivado"
+
     try:
-        # Desvincular el negocio del usuario, pero no borrar el usuario.
-        # El usuario podrá registrar otro negocio o seguir como cliente.
-        if user:
-            user.business_id = None
-        db.session.delete(business)
+        business.is_active = new_status
+
+        # Si se desactiva, desvincular al dueño para que pueda registrar otro negocio si lo desea.
+        if not new_status:
+            user = User.query.filter_by(business_id=id).first()
+            if user:
+                user.business_id = None
+
         db.session.commit()
-        return jsonify({"success": True, "message": f"Negocio {business.name} eliminado."})
+        return jsonify({"success": True, "message": f"Negocio '{business.name}' {action}."})
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/admin/delete_user/<int:user_id>', methods=['POST'], strict_slashes=False)
+@app.route('/admin/toggle_user_status/<int:user_id>', methods=['POST'], strict_slashes=False)
 @admin_required
-def delete_user(user_id):
+def toggle_user_status(user_id):
     """
-    Elimina un usuario por su ID. Si el usuario es dueño de un negocio,
-    también elimina el negocio asociado.
+    Activa o desactiva un usuario (Soft Delete).
+    Si se desactiva un usuario, su negocio asociado también se desactiva.
     """
     user = User.query.get_or_404(user_id)
-    
+    if user.role == 'admin':
+        return jsonify({"error": "No se puede desactivar a un administrador."}), 403
+
+    new_status = not user.is_active
+    action = "reactivado" if new_status else "desactivado"
+
     try:
-        # Si el usuario tiene un negocio, también lo eliminamos
-        if user.business_id:
+        user.is_active = new_status
+
+        # Si se desactiva un usuario, también se desactiva su negocio.
+        if not new_status and user.business_id:
             business = Business.query.get(user.business_id)
             if business:
-                db.session.delete(business)
-        
-        # Finalmente, eliminamos al usuario
-        db.session.delete(user)
+                business.is_active = False
+
         db.session.commit()
-        return jsonify({"success": True, "message": f"Usuario {user.email} eliminado."})
+        return jsonify({"success": True, "message": f"Usuario '{user.email}' {action}."})
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(404)
 def not_found(e):
+    # Si la petición es AJAX, devolver JSON. Si no, renderizar plantilla.
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(error="Recurso no encontrado"), 404
     return render_template('index.html', error_404=True), 404
 
 @app.errorhandler(500)
