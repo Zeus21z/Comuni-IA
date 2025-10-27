@@ -20,11 +20,11 @@
     panel.style.display = 'none';
   });
 
-  // PUSH MENSAJE
-  const pushMsg = (text, who='bot') => {
+  // PUSH MENSAJE (AHORA USA innerHTML PARA HTML)
+  const pushMsg = (html, who = 'bot') => {
     const div = document.createElement('div');
     div.className = who === 'user' ? 'msg-user' : 'msg-bot';
-    div.textContent = text;
+    div.innerHTML = html;  // ← AQUÍ ESTÁ EL CAMBIO CLAVE
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
     return div;
@@ -35,9 +35,9 @@
     const text = (input.value || '').trim();
     if(!text) return;
 
-    pushMsg(text, 'user');
+    pushMsg(text.replace(/\n/g, '<br>'), 'user');
     input.value = '';
-    const thinking = pushMsg('🤔 Pensando...', 'bot');
+    const thinking = pushMsg('Pensando...', 'bot');
 
     try {
       const resp = await fetch('/api/chat', {
@@ -50,9 +50,9 @@
       thinking.className = 'msg-bot';
       thinking.innerHTML = data.reply ? 
         data.reply.replace(/\n/g, '<br>') : 
-        '❌ Sin respuesta';
+        'Sin respuesta';
     } catch(e) {
-      thinking.innerHTML = '🌐 Error de conexión';
+      thinking.innerHTML = 'Error de conexión';
     }
   };
 
@@ -63,9 +63,24 @@
   });
 
   // ESCAPE
-  document.addEventListener('keydown', (e) => {
+  document.addEventListener('keypress', (e) => {
     if(e.key === 'Escape' && panel.style.display === 'flex') {
       panel.style.display = 'none';
     }
   });
+
+  // MENSAJE DE BIENVENIDA CON PERSONALIDAD
+  setTimeout(() => {
+    pushMsg(`
+      <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:12px; margin:8px 0;">
+        <strong>¡Hola! Soy <span style="color:#1976d2">GuIA</span></strong><br>
+        <small>Tu asistente de compras en Santa Cruz</small>
+      </div>
+      <div style="font-size:0.9em; color:#555;">
+        Dime qué necesitas: <strong>laptop, comida, ropa...</strong><br>
+        ¡Te lo encuentro al toque!
+      </div>
+    `, 'bot');
+  }, 800);
+
 })();

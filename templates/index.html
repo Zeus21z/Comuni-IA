@@ -10,10 +10,11 @@
     <div class="row justify-content-center">
       <div class="col-lg-8">
         <h1 class="display-4 fw-bold mb-4">Apoya tu emprendimiento local</h1>
-        <p class="lead mb-4 opacity-90">Descubre +200 negocios cruceños con IA personalizada</p>
+        <p class="lead mb-4 opacity-90">Descubre negocios cruceños con IA personalizada</p>
         <div class="d-flex justify-content-center gap-3 flex-wrap">
           <a href="#destacados" class="btn btn-primary btn-lg px-4">Ver Negocios</a>
           <a href="{{ url_for('register_client') }}" class="btn btn-outline-light btn-lg px-4">Crear Perfil Gratis</a>
+          <button onclick="startTour()" class="btn btn-info btn-lg px-4">Hacer un Tour</button>
         </div>
       </div>
     </div>
@@ -151,6 +152,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/tour.js') }}"></script>
 <script>
 // ANIMACIONES
 document.addEventListener('DOMContentLoaded', () => {

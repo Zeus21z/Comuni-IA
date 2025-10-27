@@ -1,0 +1,165 @@
+/* === CHATBOT PANEL === */
+.chatbot-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 60px;
+  height: 60px;
+  background: #1976d2;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.chatbot-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+}
+
+.chatbot-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: 380px;
+  height: 520px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  display: none;
+  flex-direction: column;
+  z-index: 1000;
+  overflow: hidden;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.chatbot-header {
+  background: #1976d2;
+  color: white;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 1.1em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chatbot-messages {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  background: #f5f7fa;
+}
+
+.msg-bot, .msg-user {
+  max-width: 85%;
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: 16px;
+  line-height: 1.4;
+  font-size: 0.95em;
+  word-wrap: break-word;
+}
+
+.msg-bot {
+  background: white;
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.msg-user {
+  background: #1976d2;
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+  margin-left: auto;
+}
+
+.chatbot-input {
+  padding: 12px;
+  background: white;
+  border-top: 1px solid #eee;
+}
+
+.chatbot-input .form-control {
+  border-radius: 20px;
+  padding-left: 16px;
+  border: 1px solid #ddd;
+}
+
+.chatbot-input .btn {
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* === PRODUCTOS EN CHAT === */
+.producto-chat {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 12px;
+  margin: 10px 0;
+  font-size: 0.92em;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.producto-chat .detalle {
+  margin: 6px 0 8px;
+  color: #2c3e50;
+  line-height: 1.5;
+}
+
+.producto-chat .negocio {
+  font-size: 0.88em;
+  color: #555;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.btn-ir-local {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.88em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-block;
+}
+
+.btn-ir-local:hover {
+  background: #218838;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(40,167,69,0.3);
+}
+
+hr {
+  border: 0;
+  border-top: 1px dashed #ddd;
+  margin: 14px 0;
+}
+
+/* SCROLLBAR BONITA */
+.chatbot-messages::-webkit-scrollbar {
+  width: 6px;
+}
+.chatbot-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chatbot-messages::-webkit-scrollbar-thumb {
+  background: #c5c5c5;
+  border-radius: 3px;
+}

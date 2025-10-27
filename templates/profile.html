@@ -108,6 +108,51 @@
     </div>
   </div>
 
+  <!-- SECCIÓN DE RESERVAS (SOLO PARA DUEÑOS) -->
+  {% if is_owner and reservations %}
+  <section class="mb-5">
+    <h2 class="section-title">Reservas Pendientes</h2>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Producto</th>
+            <th>Cliente</th>
+            <th>Cantidad</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reservations %}
+          <tr data-reservation-id="{{ r.id }}">
+            <td>{{ r.product.name }}</td>
+            <td>{{ r.user.email }}</td>
+            <td>{{ r.quantity }}</td>
+            <td>{{ r.created_at.strftime('%d/%m/%y %H:%M') }}</td>
+            <td>
+              <span class="badge 
+                {% if r.status == 'pendiente' %}bg-warning text-dark
+                {% elif r.status == 'confirmada' %}bg-success
+                {% elif r.status == 'rechazada' %}bg-danger
+                {% else %}bg-secondary
+                {% endif %}">{{ r.status|capitalize }}</span>
+            </td>
+            <td>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-outline-success update-status" data-status="confirmada" title="Confirmar"><i class="bi bi-check-lg"></i></button>
+                <button class="btn btn-sm btn-outline-danger update-status" data-status="rechazada" title="Rechazar"><i class="bi bi-x-lg"></i></button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
   <!-- PRODUCTOS -->
   <section class="mb-5">
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -127,6 +172,11 @@
             <div class="product-card-inner">
               <!-- Frente de la tarjeta -->
               <div class="product-card-front">
+                <!-- NUEVO: Capa superpuesta para "Click para detalles" -->
+                <div class="product-card-overlay">
+                  <span class="overlay-text"><i class="bi bi-info-circle-fill me-2"></i>Click para ver detalles</span>
+                </div>
+
                 {% if product.image_url %}
                 <img src="{{ url_for('static', filename='uploads/' + product.image_url) }}" class="product-img-new">
                 {% else %}
@@ -136,11 +186,18 @@
                 {% endif %}
                 <div class="p-3">
                   <h6 class="fw-bold mb-2">{{ product.name }}</h6>
+                  <div class="mb-2">
+                    <span class="badge {{ 'bg-success-soft text-success' if product.stock > 0 else 'bg-danger-soft text-danger' }}">
+                      {{ 'Disponibles: ' + product.stock|string if product.stock > 0 else 'Agotado' }}
+                    </span>
+                  </div>
                   <div class="d-flex justify-content-between align-items-center">
                     <span class="h6 text-primary mb-0">Bs. {{ "%.2f"|format(product.price) }}</span>
-                    <button class="btn btn-sm btn-outline-primary flip-button">
-                      <i class="bi bi-arrow-clockwise"></i> Ver Detalles
-                    </button>
+                    {% if session.user_id and not is_owner %}
+                      <button class="btn btn-sm btn-primary reserve-product" data-id="{{ product.id }}" data-name="{{ product.name }}" data-stock="{{ product.stock }}" data-bs-toggle="modal" data-bs-target="#reserveProductModal" {% if product.stock <= 0 %}disabled{% endif %}>
+                        <i class="bi bi-calendar-check"></i> Reservar
+                      </button>
+                    {% endif %}
                   </div>
                 </div>
               </div>
@@ -149,7 +206,7 @@
               <div class="product-card-back">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                   <h6 class="fw-bold mb-0">{{ product.name }}</h6>
-                  <button class="btn btn-sm btn-outline-secondary flip-button">
+                  <button class="btn btn-sm btn-outline-secondary flip-back-button" title="Volver">
                     <i class="bi bi-arrow-counterclockwise"></i>
                   </button>
                 </div>
@@ -160,12 +217,17 @@
                   <p class="text-muted">Sin descripción disponible</p>
                   {% endif %}
                 </div>
+                <div class="mb-3">
+                  <span class="badge {{ 'bg-success-soft text-success' if product.stock > 0 else 'bg-danger-soft text-danger' }}">
+                    {{ 'Disponibles: ' + product.stock|string if product.stock > 0 else 'Agotado' }}
+                  </span>
+                </div>
                 <div class="mt-auto">
                   <div class="d-flex justify-content-between align-items-center">
                     <span class="h6 text-primary mb-0">Bs. {{ "%.2f"|format(product.price) }}</span>
                     {% if is_owner %}
                     <div class="btn-group">
-                      <button class="btn btn-sm btn-outline-primary edit-product" data-bs-toggle="modal" data-bs-target="#editProductModal" data-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.price }}" data-description="{{ product.description or '' }}">
+                      <button class="btn btn-sm btn-outline-primary edit-product" data-bs-toggle="modal" data-bs-target="#editProductModal" data-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.price }}" data-description="{{ product.description or '' }}" data-stock="{{ product.stock }}">
                         <i class="bi bi-pencil"></i>
                       </button>
                       <button class="btn btn-sm btn-outline-danger delete-product" data-id="{{ product.id }}">
@@ -294,6 +356,10 @@
             <input type="number" class="form-control" name="price" id="editProductPrice" step="0.01" min="0" required>
           </div>
           <div class="mb-3">
+            <label class="form-label fw-bold">Stock Disponible</label>
+            <input type="number" class="form-control" name="stock" id="editProductStock" min="0" required>
+          </div>
+          <div class="mb-3">
             <label class="form-label fw-bold">Nueva Imagen (opcional)</label>
             <input type="file" class="form-control" name="image" accept="image/*">
           </div>
@@ -325,10 +391,44 @@
             <input type="number" class="form-control" name="price" step="0.01" min="0" required>
           </div>
           <div class="mb-3">
+            <label class="form-label fw-bold">Stock Inicial</label>
+            <input type="number" class="form-control" name="stock" min="0" value="0" required>
+          </div>
+          <div class="mb-3">
             <label class="form-label fw-bold">Imagen</label>
             <input type="file" class="form-control" name="image" accept="image/*">
           </div>
           <button type="submit" class="btn btn-primary w-100">Agregar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- MODAL RESERVAR PRODUCTO -->
+{% if session.user_id and not is_owner %}
+<div class="modal fade" id="reserveProductModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Reservar Producto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form id="reserveProductForm">
+          <input type="hidden" name="product_id" id="reserveProductId">
+          <h6 class="fw-bold" id="reserveProductName"></h6>
+          <p class="text-muted">Stock disponible: <span id="reserveProductStock"></span></p>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Cantidad a reservar</label>
+            <input type="number" class="form-control" name="quantity" id="reserveProductQuantity" min="1" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Notas para el vendedor (opcional)</label>
+            <textarea class="form-control" name="notes" rows="2" placeholder="Ej: 'Pasaré a recogerlo mañana por la tarde'"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Confirmar Reserva</button>
         </form>
       </div>
     </div>
@@ -430,12 +530,95 @@
   const businessId = profileContainer.dataset.businessId;
   const isOwner = profileContainer.dataset.isOwner === 'true';
 
-  // Manejador del efecto flip
-  document.querySelectorAll('.flip-button').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const card = e.target.closest('.product-card-new');
+  // --- FIX: Evitar que la tarjeta se voltee con el mouse ---
+  // El CSS original probablemente tiene un :hover que causa el flip.
+  // Con JS, añadimos y quitamos una clase 'hover-effect' para controlar esto
+  // y asegurarnos de que solo se voltee al hacer clic en el botón de detalles.
+  document.querySelectorAll('.product-card-new').forEach(card => {
+    card.addEventListener('mouseenter', () => card.classList.add('hover-effect'));
+    card.addEventListener('mouseleave', () => card.classList.remove('hover-effect'));
+  });
+
+  // --- LÓGICA DE FLIP CARD MEJORADA ---
+  document.querySelectorAll('.product-card-new').forEach(card => {
+    // Voltear la tarjeta al hacer clic en ella
+    card.addEventListener('click', (e) => {
+      // Evitar que la tarjeta se voltee si se hace clic en un botón (ej. Reservar)
+      if (e.target.closest('button, a')) {
+        return;
+      }
       card.classList.toggle('flipped');
+    });
+  });
+  
+  // Voltear la tarjeta de vuelta al hacer clic en el botón "Volver" del reverso
+  document.querySelectorAll('.flip-back-button').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Detener la propagación para no volver a activar el flip del padre
+      e.target.closest('.product-card-new').classList.remove('flipped');
+    });
+  });
+
+  // --- LÓGICA DE RESERVAS (CLIENTE) ---
+  document.querySelectorAll('.reserve-product').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const data = e.currentTarget.dataset;
+      document.getElementById('reserveProductId').value = data.id;
+      document.getElementById('reserveProductName').textContent = data.name;
+      const stockSpan = document.getElementById('reserveProductStock');
+      stockSpan.textContent = data.stock;
+      const quantityInput = document.getElementById('reserveProductQuantity');
+      quantityInput.max = data.stock;
+      quantityInput.value = 1;
+    });
+  });
+
+  const reserveForm = document.getElementById('reserveProductForm');
+  reserveForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(reserveForm);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+      const resp = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await resp.json();
+      if (result.success) {
+        alert(result.message + ' El vendedor se pondrá en contacto contigo.');
+        location.reload();
+      } else {
+        alert('Error: ' + (result.error || 'No se pudo crear la reserva.'));
+      }
+    } catch (err) {
+      alert('Error de conexión al intentar reservar.');
+    }
+  });
+
+  // --- LÓGICA DE GESTIÓN DE RESERVAS (DUEÑO) ---
+  document.querySelectorAll('.update-status').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const button = e.currentTarget;
+      const reservationId = button.closest('tr').dataset.reservationId;
+      const newStatus = button.dataset.status;
+
+      if (!confirm(`¿Seguro que quieres cambiar el estado de esta reserva a "${newStatus}"?`)) return;
+
+      try {
+        const resp = await fetch(`/api/reservations/${reservationId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        const result = await resp.json();
+        if (result.success) {
+          location.reload();
+        } else {
+          alert('Error: ' + (result.error || 'No se pudo actualizar el estado.'));
+        }
+      } catch (err) { alert('Error de conexión.'); }
     });
   });
 
@@ -504,6 +687,7 @@
       document.getElementById('editProductName').value = data.name;
       document.getElementById('editProductDescription').value = data.description;
       document.getElementById('editProductPrice').value = data.price;
+      document.getElementById('editProductStock').value = data.stock;
     });
   });
 

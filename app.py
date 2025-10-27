@@ -87,6 +87,7 @@ class Product(db.Model):
     name = db.Column(db.String(160), nullable=False)
     description = db.Column(db.Text, nullable=True)  # Descripción detallada del producto
     price = db.Column(db.Float, nullable=False)
+    stock = db.Column(db.Integer, nullable=False, default=0) # NUEVO CAMPO
     image_url = db.Column(db.String(500), nullable=True)  # Ruta relativa a static/uploads
 
 class User(db.Model):
@@ -106,6 +107,21 @@ class User(db.Model):
     
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+class Reservation(db.Model):
+    __tablename__ = 'reservations'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    business_id = db.Column(db.Integer, db.ForeignKey('businesses.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pendiente') # pendiente, confirmada, rechazada, completada
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    notes = db.Column(db.Text, nullable=True)
+
+    user = db.relationship('User', backref='reservations')
+    product = db.relationship('Product', backref='reservations')
+    business = db.relationship('Business', backref='reservations')
 
 with app.app_context():
     db.create_all()
@@ -348,21 +364,24 @@ def home():
     search_query = request.args.get('search', '').strip()
     category_filter = request.args.get('category', '').strip()
     
-    query = Business.query
+    # Inicia la consulta con negocios activos
+    query = Business.query.filter(Business.is_active == True)
     
     if search_query:
-        query = query.filter(
+        # MEJORA: Buscar también en los productos
+        # Hacemos un outerjoin para incluir los productos en la búsqueda
+        # y usamos distinct() para no repetir negocios si varios productos coinciden.
+        query = query.outerjoin(Product).filter(
             db.or_(
                 Business.name.ilike(f'%{search_query}%'),
-                Business.description.ilike(f'%{search_query}%')
+                Business.description.ilike(f'%{search_query}%'),
+                Product.name.ilike(f'%{search_query}%'),
+                Product.description.ilike(f'%{search_query}%')
             )
-        )
+        ).distinct()
     
     if category_filter and category_filter != 'Todas las categorías':
         query = query.filter(Business.category == category_filter)
-    
-    # MEJORA: Mostrar solo negocios activos en la página principal
-    query = query.filter(Business.is_active == True)
 
     businesses = query.order_by(Business.id.desc()).all()
     
@@ -385,13 +404,24 @@ def profile(id):
     
     is_owner = False
     is_favorited = False
+    reservations_for_owner = []
+    
+    # Si el usuario es el dueño, cargar las reservas de su negocio
+    if 'user_id' in session and User.query.get(session['user_id']) and User.query.get(session['user_id']).business_id == id:
+        is_owner = True
+        reservations_for_owner = db.session.query(Reservation).join(Product).filter(Product.business_id == id).order_by(Reservation.created_at.desc()).all()
     
     # Lógica de conteo de visitas y estado de favorito/dueño
     if 'user_id' in session:
         user = User.query.get(session['user_id'])
         if user:
-            if user.business_id == id:
-                is_owner = True
+            # Esta comprobación ya se hace arriba, pero la mantenemos por si el flujo cambia
+            if not is_owner and user.business_id == id:
+                 is_owner = True
+                 # Recargar reservas si se detecta que es dueño aquí
+                 if not reservations_for_owner:
+                    reservations_for_owner = db.session.query(Reservation).join(Product).filter(Product.business_id == id).order_by(Reservation.created_at.desc()).all()
+
             
             if business in user.favorite_businesses:
                 is_favorited = True
@@ -405,7 +435,7 @@ def profile(id):
     return render_template('profile.html', business=business, products=products,
                          reviews=[r.to_dict() for r in reviews_query],
                          avg_rating=round(avg_rating, 1), view_count=view_count,
-                         is_owner=is_owner,
+                         is_owner=is_owner, reservations=reservations_for_owner,
                          is_favorited=is_favorited)
 
 @app.route('/api/business/<int:business_id>/favorite', methods=['POST'], strict_slashes=False)
@@ -499,8 +529,13 @@ def format_gemini_response(text):
     text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
     return text
 
+# --- NUEVA VARIABLE GLOBAL (fuera de la función)
+last_search_query = ""
+
 @app.route('/api/chat', methods=['POST'], strict_slashes=False)
 def chat():
+    global last_search_query
+    
     if not GEMINI_MODEL:
         return jsonify({"error": "Gemini no configurado. Define GEMINI_API_KEY en .env"}), 500
 
@@ -509,131 +544,422 @@ def chat():
     if not user_msg:
         return jsonify({"error": "Falta 'message'"}), 400
 
-    # --- LIMPIEZA Y PREPARACIÓN DEL MENSAJE ---
-    import re
-    import unicodedata
+    # --- DETECCIÓN DE MODO: BÚSQUEDA vs ASISTENTE ---
+    user_msg_lower = user_msg.lower()
+    
+    # Palabras clave para MODO BÚSQUEDA (productos/servicios)
+    search_keywords = ['busco', 'quiero', 'necesito', 'tienes', 'vendes', 'comprar', 'precio de', 
+                      'cuanto cuesta', 'hay', 'donde encontrar', 'encontrar', 'dónde', 'consigo', 
+                      'recomiendame', 'recomiéndame', 'producto', 'servicio', 'venta']
+    
+    # Palabras clave para MODO ASISTENTE (consejos/ayuda)
+    assistant_keywords = ['consejo', 'consejos', 'ayuda', 'cómo', 'como', 'qué', 'que', 'por qué', 
+                         'porque', 'mejora', 'mejorar', 'sugerencia', 'sugerencias', 'tips', 'tip', 
+                         'recomendación', 'recomendaciones', 'idea', 'ideas', 'estrategia', 
+                         'qué hacer', 'que hacer', 'cómo mejorar', 'como mejorar', 'ayudame', 
+                         'ayúdame', 'orientación', 'guía', 'advice', 'help']
+    
+    # Detectar si es una búsqueda de producto
+    is_product_search = any(keyword in user_msg_lower for keyword in search_keywords)
+    
+    # Detectar si es una consulta de asistencia
+    is_assistant_query = any(keyword in user_msg_lower for keyword in assistant_keywords)
+    
+    # Detectar si es un "sí" a una búsqueda anterior
+    is_affirmative = user_msg_lower in ['si', 'sí', 'sii', 'claro', 'dale', 'ok', 'sí quiero', 
+                                       'por supuesto', 'adelante', 'yes', 'y']
 
-    cleaned_msg = user_msg.lower()
-    cleaned_msg = re.sub(r'[^\w\s]', '', cleaned_msg)
-    cleaned_msg = ''.join(
-        c for c in unicodedata.normalize('NFD', cleaned_msg)
-        if unicodedata.category(c) != 'Mn'
-    )
-
-    # --- DETECCIÓN DE INTENCIÓN ---
-    search_keywords = [
-        'busco', 'recomienda', 'necesito', 'donde hay', 'quiero', 'encuentra',
-        'negocio', 'tienda', 'servicio', 'comida', 'ropa', 'restaurante',
-        'menu', 'carta', 'producto'
-    ]
-    is_search_intent = any(keyword in cleaned_msg for keyword in search_keywords)
-    is_menu_intent = 'menu' in cleaned_msg or 'carta' in cleaned_msg
-    is_short_message = len(cleaned_msg.split()) <= 2
-
-    # --- VARIABLES PARA RESULTADOS ---
-    businesses_found = []
-    response_context = ""
-
-    # --- BÚSQUEDA EN BASE DE DATOS ---
-    search_terms = [t for t in cleaned_msg.split() if len(t) > 2]
-
-    if is_search_intent and not is_menu_intent:
-        # Buscar coincidencias en negocios
-        filters = [
-            db.or_(
-                Business.name.ilike(f'%{term}%'),
-                Business.description.ilike(f'%{term}%'),
-                Business.category.ilike(f'%{term}%')
-            ) for term in search_terms
-        ]
-        if filters:
-            businesses_found = Business.query.filter(db.or_(*filters)).limit(5).all()
-
-        # Buscar coincidencias también en productos
-        product_filters = [
-            db.or_(
-                Product.name.ilike(f"%{term}%"),
-                Product.description.ilike(f"%{term}%")
-            ) for term in search_terms
-        ]
-        if product_filters:
-            product_results = Product.query.filter(db.or_(*product_filters)).limit(5).all()
-            for p in product_results:
-                if p.business not in businesses_found:
-                    businesses_found.append(p.business)
-
-        # Armar el contexto de respuesta
-        if not businesses_found:
-            response_context = "No se encontraron negocios que coincidan con tu búsqueda."
+    # --- MODO BÚSQUEDA (Mantener lógica actual) ---
+    if is_product_search or (is_affirmative and last_search_query):
+        # MANEJO DE "SÍ" PARA REINTENTAR BÚSQUEDA
+        if is_affirmative and last_search_query:
+            search_term = last_search_query
+        elif is_affirmative and not last_search_query:
+            return jsonify({"reply": "¡Perfecto! ¿Qué producto o servicio estás buscando exactamente? 😊"})
         else:
-            response_context = "Encontré estos lugares relacionados:\n\n"
-            for b in businesses_found:
-                response_context += f"🏪 <strong>{b.name}</strong> — {b.category}\n"
-                if b.description:
-                    response_context += f"{b.description[:120]}...\n"
-                response_context += f"📍 <a href='/profile/{b.id}'>Ver perfil</a>\n"
+            # EXTRAER TÉRMINO DE BÚSQUEDA
+            search_terms = user_msg_lower
+            
+            # Primero intentar extraer después de palabras clave
+            extracted_term = ""
+            for keyword in search_keywords:
+                if keyword in user_msg_lower:
+                    parts = user_msg_lower.split(keyword, 1)
+                    if len(parts) > 1:
+                        extracted_term = parts[1].strip()
+                        break
+            
+            if not extracted_term:
+                extracted_term = user_msg
+            
+            # Limpiar el término
+            stop_words = ['una', 'un', 'de', 'del', 'la', 'el', 'en', 'con', 'para', 'por', 
+                         'a', 'y', 'o', 'algun', 'alguna', 'algunos', 'por favor', 'favor', 'gracias']
+            words = extracted_term.split()
+            cleaned_words = [word for word in words if word not in stop_words and len(word) > 1]
+            search_term = ' '.join(cleaned_words).strip()
+            
+            if not search_term:
+                search_term = user_msg
 
-                productos = Product.query.filter_by(business_id=b.id).limit(3).all()
-                if productos:
-                    response_context += "🍽️ Menú destacado:\n"
-                    for p in productos:
-                        response_context += f"• {p.name} — {p.price:.2f} Bs\n"
-                    response_context += "\n"
-                else:
-                    response_context += "\n"
+        # GUARDAR ÚLTIMA BÚSQUEDA
+        if search_term and not is_affirmative:
+            last_search_query = search_term
 
-    elif is_menu_intent:
-        # --- SI PIDE UN MENÚ DIRECTO ---
-        name_match = re.search(r'menu (de|del)? ([\w\s]+)', cleaned_msg)
-        if name_match:
-            business_name = name_match.group(2).strip()
-            business = Business.query.filter(Business.name.ilike(f"%{business_name}%")).first()
-            if business:
-                productos = Product.query.filter_by(business_id=business.id).all()
-                if productos:
-                    response_context = f"🍽️ Menú de {business.name}:\n"
-                    for p in productos:
-                        response_context += f"• {p.name} — {p.price:.2f} Bs\n"
-                    response_context += f"\n📍 <a href='/profile/{business.id}'>Ver más del negocio</a>"
+        # BÚSQUEDA EN BASE DE DATOS (lógica existente)
+        found_products = []
+        found_businesses = []
+        
+        if len(search_term) >= 2:
+            # PRIMERO: Búsqueda PRECISA en productos
+            search_words = search_term.lower().split()
+            
+            # Buscar productos que coincidan con ALGUNA palabra del término de búsqueda
+            all_products = Product.query.filter(Product.stock > 0).all()
+            
+            for product in all_products:
+                product_name_lower = product.name.lower()
+                product_desc_lower = (product.description or "").lower()
+                business_name_lower = product.business.name.lower() if product.business else ""
+                
+                # Calcular puntuación de coincidencia
+                score = 0
+                
+                # Coincidencia exacta en nombre (máxima prioridad)
+                if search_term.lower() in product_name_lower:
+                    score += 10
+                # Coincidencia con todas las palabras en nombre
+                elif all(word in product_name_lower for word in search_words if len(word) > 2):
+                    score += 8
+                # Coincidencia con alguna palabra en nombre
+                elif any(word in product_name_lower for word in search_words if len(word) > 2):
+                    score += 5
+                # Coincidencia en descripción
+                if search_term.lower() in product_desc_lower:
+                    score += 3
+                # Coincidencia con palabras en descripción
+                elif any(word in product_desc_lower for word in search_words if len(word) > 2):
+                    score += 2
+                # Coincidencia en nombre del negocio
+                if search_term.lower() in business_name_lower:
+                    score += 2
+                
+                # Solo incluir productos con puntuación significativa
+                if score >= 3:
+                    business = Business.query.get(product.business_id)
+                    if business and business.is_active:
+                        found_products.append({
+                            'product': product,
+                            'business': business,
+                            'score': score
+                        })
+            
+            # Ordenar por puntuación (mejores resultados primero)
+            found_products.sort(key=lambda x: x['score'], reverse=True)
+            
+            # SEGUNDO: Si no hay productos, buscar negocios por categoría
+            if not found_products:
+                # Mapeo expandido de categorías
+                category_map = {
+                    # Tecnología
+                    'laptop': 'Tecnología', 'computadora': 'Tecnología', 'pc': 'Tecnología', 
+                    'ordenador': 'Tecnología', 'portatil': 'Tecnología', 'notebook': 'Tecnología',
+                    'celular': 'Tecnología', 'smartphone': 'Tecnología', 'movil': 'Tecnología', 'teléfono': 'Tecnología',
+                    'tablet': 'Tecnología', 'ipad': 'Tecnología', 'tecnologia': 'Tecnología',
+                    'impresora': 'Tecnología', 'monitor': 'Tecnología', 'teclado': 'Tecnología',
+                    
+                    # Servicios Legales
+                    'abogado': 'Servicios Profesionales', 'abogada': 'Servicios Profesionales',
+                    'divorcio': 'Servicios Profesionales', 'divorciarse': 'Servicios Profesionales',
+                    'legal': 'Servicios Profesionales', 'ley': 'Servicios Profesionales',
+                    'juicio': 'Servicios Profesionales', 'demanda': 'Servicios Profesionales',
+                    'asesor': 'Servicios Profesionales', 'asesoria': 'Servicios Profesionales',
+                    'abogacia': 'Servicios Profesionales', 'derecho': 'Servicios Profesionales',
+                    'abogados': 'Servicios Profesionales',
+                    
+                    # Contabilidad
+                    'contador': 'Servicios Profesionales', 'contadora': 'Servicios Profesionales',
+                    'impuesto': 'Servicios Profesionales', 'tributario': 'Servicios Profesionales',
+                    'declaracion': 'Servicios Profesionales', 'fiscal': 'Servicios Profesionales',
+                    'contabilidad': 'Servicios Profesionales',
+                    
+                    # Comida
+                    'comida': 'Gastronomía', 'restaurante': 'Gastronomía', 'alimento': 'Gastronomía',
+                    'pizza': 'Gastronomía', 'hamburguesa': 'Gastronomía', 'sushi': 'Gastronomía',
+                    'comida rapida': 'Gastronomía', 'almuerzo': 'Gastronomía', 'cena': 'Gastronomía',
+                    'desayuno': 'Gastronomía', 'comida china': 'Gastronomía',
+                    
+                    # Ropa
+                    'ropa': 'Moda y Ropa', 'vestido': 'Moda y Ropa', 'zapato': 'Moda y Ropa',
+                    'camisa': 'Moda y Ropa', 'pantalon': 'Moda y Ropa', 'jeans': 'Moda y Ropa',
+                    'calzado': 'Moda y Ropa', 'moda': 'Moda y Ropa', 'blusa': 'Moda y Ropa',
+                    
+                    # Belleza
+                    'belleza': 'Belleza y Cuidado Personal', 'estetica': 'Belleza y Cuidado Personal', 
+                    'spa': 'Belleza y Cuidado Personal', 'salon': 'Belleza y Cuidado Personal',
+                    'corte': 'Belleza y Cuidado Personal', 'pelo': 'Belleza y Cuidado Personal',
+                    'peluqueria': 'Belleza y Cuidado Personal', 'manicura': 'Belleza y Cuidado Personal',
+                    'foto': 'Belleza y Cuidado Personal', 'fotografia': 'Belleza y Cuidado Personal',
+                    'estudio': 'Belleza y Cuidado Personal',
+                    
+                    # Salud
+                    'salud': 'Salud y Bienestar', 'medico': 'Salud y Bienestar', 'farmacia': 'Salud y Bienestar',
+                    'doctor': 'Salud y Bienestar', 'clinica': 'Salud y Bienestar', 'hospital': 'Salud y Bienestar',
+                    
+                    # Educación
+                    'educacion': 'Educación', 'clase': 'Educación', 'curso': 'Educación',
+                    'profesor': 'Educación', 'tutor': 'Educación', 'enseñanza': 'Educación',
+                    'yoga': 'Educación', 'clases': 'Educación',
+                    
+                    # Servicios Generales
+                    'servicio': 'Servicios Profesionales', 'reparacion': 'Servicios Profesionales', 
+                    'mantenimiento': 'Servicios Profesionales', 'tecnico': 'Servicios Profesionales',
+                    
+                    # Hogar
+                    'hogar': 'Hogar y Decoración', 'mueble': 'Hogar y Decoración', 
+                    'decoracion': 'Hogar y Decoración', 'casa': 'Hogar y Decoración'
+                }
+                
+                # Buscar categoría coincidente
+                possible_category = None
+                for keyword, category in category_map.items():
+                    if any(word == keyword for word in search_words):
+                        possible_category = category
+                        break
+                    elif any(keyword in word for word in search_words):
+                        possible_category = category
+                        break
+                
+                # Buscar negocios por categoría o nombre
+                if possible_category:
+                    found_businesses = Business.query.filter(
+                        Business.category.ilike(f'%{possible_category}%'),
+                        Business.is_active == True
+                    ).limit(5).all()
                 else:
-                    response_context = f"{business.name} no tiene productos registrados todavía."
+                    # Búsqueda general en negocios por nombre o descripción
+                    business_query = Business.query.filter(Business.is_active == True)
+                    
+                    # Construir consulta OR para cada palabra de búsqueda
+                    or_filters = []
+                    for word in search_words:
+                        if len(word) > 2:
+                            or_filters.append(Business.name.ilike(f'%{word}%'))
+                            or_filters.append(Business.description.ilike(f'%{word}%'))
+                            or_filters.append(Business.category.ilike(f'%{word}%'))
+                    
+                    if or_filters:
+                        business_query = business_query.filter(db.or_(*or_filters))
+                        found_businesses = business_query.limit(3).all()
+
+        # CONSTRUIR RESPUESTA DE BÚSQUEDA
+        response_html = ""
+        found_results = False
+
+        # FUNCIÓN PARA CREAR BOTONES (FIJA)
+        def create_business_button(business, button_type="product"):
+            if button_type == "product":
+                color = "#4CAF50"  # Verde para productos
+                text = f"📍 Ir a {business.name}"
             else:
-                response_context = f"No encontré un negocio llamado '{business_name}'."
+                color = "#2196F3"  # Azul para negocios
+                text = f"📍 Visitar {business.name}"
+            
+            return f'<button class="btn-ir-local" onclick="window.location.href=\'/profile/{business.id}\'" style="background: {color}; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 8px; font-size: 14px; font-weight: bold;">{text}</button>'
+
+        # Mostrar productos encontrados
+        if found_products:
+            found_results = True
+            response_html += "🛍️ **¡Encontré estos productos para ti!**\n\n"
+            
+            for item in found_products[:4]:
+                p = item['product']
+                b = item['business']
+                
+                stock_text = f"📦 {p.stock} disponibles" if p.stock > 10 else f"📦 Solo {p.stock} disponibles"
+                button = create_business_button(b, "product")
+                
+                product_desc = p.description[:100] + "..." if p.description and len(p.description) > 100 else (p.description or "Sin descripción")
+                
+                response_html += f"""
+                <div class='producto-chat' style='border: 1px solid #e0e0e0; padding: 15px; margin: 12px 0; border-radius: 10px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                    <strong style='color: #2c5530; font-size: 16px; display: block; margin-bottom: 8px;'>🎯 {p.name}</strong>
+                    <div class='detalle' style='margin: 8px 0; color: #555;'>
+                        💰 <strong>Precio: {p.price:.2f} Bs</strong><br>
+                        {stock_text}<br>
+                        📝 {product_desc}<br>
+                        🏪 <strong>Local:</strong> {b.name}
+                    </div>
+                    {button}
+                </div>
+                """
+
+        # Mostrar negocios encontrados
+        elif found_businesses:
+            found_results = True
+            
+            search_type = "servicios"
+            if any(word in ['comida', 'restaurante', 'pizza'] for word in search_words):
+                search_type = "restaurantes"
+            elif any(word in ['ropa', 'moda', 'zapato'] for word in search_words):
+                search_type = "tiendas de ropa"
+            elif any(word in ['tecnologia', 'laptop', 'celular'] for word in search_words):
+                search_type = "tiendas de tecnología"
+            elif any(word in ['abogado', 'legal', 'divorcio'] for word in search_words):
+                search_type = "servicios legales"
+            elif any(word in ['foto', 'fotografia', 'estudio'] for word in search_words):
+                search_type = "estudios fotográficos"
+                
+            response_html += f"🏢 **¡Encontré estos {search_type}!**\n\n"
+            
+            for business in found_businesses:
+                button = create_business_button(business, "business")
+                
+                business_desc = business.description[:120] + "..." if len(business.description) > 120 else business.description
+                
+                response_html += f"""
+                <div class='negocio-chat' style='border: 1px solid #bbdefb; padding: 15px; margin: 12px 0; border-radius: 10px; background: #e3f2fd;'>
+                    <strong style='color: #1565c0; font-size: 16px; display: block; margin-bottom: 8px;'>🏪 {business.name}</strong>
+                    <div class='detalle' style='margin: 8px 0; color: #555;'>
+                        📍 <strong>Ubicación:</strong> {business.location}<br>
+                        🏷️ <strong>Categoría:</strong> {business.category}<br>
+                        📝 {business_desc}
+                    </div>
+                    {button}
+                </div>
+                """
+
+        # SI NO ENCONTRÓ NADA EN BÚSQUEDA
+        if not found_results:
+            if is_affirmative:
+                response_html = f"""
+                <div style='padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; color: #856404;'>
+                    🤔 No encontré resultados relevantes para '<strong>{last_search_query}</strong>'. 
+                    <br><br>
+                    <strong>💡 Sugerencias para mejorar tu búsqueda:</strong>
+                    <ul style='margin: 8px 0; padding-left: 20px;'>
+                        <li>Usa palabras más específicas como "Laptop HP", "Abogado civil" o "Restaurante italiano"</li>
+                        <li>Busca por categorías: <strong>tecnología, comida, ropa, servicios legales, belleza</strong></li>
+                        <li>Intenta con el nombre exacto del producto o servicio</li>
+                        <li>Ejemplos: "quiero una laptop gamer", "busco abogado de divorcio", "necesito comida china"</li>
+                    </ul>
+                    <br>
+                    <em>¿Qué tipo de producto o servicio buscas exactamente?</em>
+                </div>
+                """
+            else:
+                response_html = f"""
+                <div style='padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; color: #856404;'>
+                    🔍 No encontré resultados para '<strong>{search_term}</strong>'. 
+                    <br><br>
+                    <strong>¿Quieres que busque algo similar?</strong> Responde 'sí' para continuar 😊
+                    <br><br>
+                    <small>💡 Tip: Prueba con términos como "abogado", "comida", "tecnología", "ropa"</small>
+                </div>
+                """
+
+        # RESPUESTA FINAL PARA BÚSQUEDA
+        if found_results:
+            if found_products:
+                intro = f"¡Perfecto! 🔍 Encontré estos productos de '{search_term}' para ti:\n\n"
+            else:
+                intro = f"¡Genial! 🏢 Encontré estos negocios relacionados con '{search_term}':\n\n"
+            
+            reply = f"{intro}{response_html}"
         else:
-            response_context = "Por favor, dime el nombre del negocio del que quieres ver el menú."
+            reply = response_html
 
-    else:
-        # --- CONVERSACIÓN GENERAL ---
-        final_prompt = (
-            "Eres un asistente virtual amigable y servicial para 'Comuni IA', "
-            "un directorio de negocios locales en Santa Cruz, Bolivia. "
-            "Responde de forma breve y natural. "
-            "Si te preguntan qué puedes hacer, explica que puedes ayudar a encontrar negocios, productos o menús.\n\n"
-            f"Usuario: {user_msg}\nAsistente:"
-        )
+        return jsonify({"reply": format_gemini_response(reply)})
+
+    # --- MODO ASISTENTE (Nuevo para consejos y ayuda) ---
+    elif is_assistant_query:
+        # PROMPT ESPECIALIZADO PARA ASESORÍA DE NEGOCIOS
+        assistant_prompt = f"""
+        Eres GuIA, un asistente especializado en emprendimiento y negocios para Comuni IA en Santa Cruz, Bolivia.
+        
+        Tu rol es ayudar a emprendedores y dueños de negocios con:
+        - Consejos prácticos de marketing y ventas
+        - Estrategias para mejorar sus negocios
+        - Tips para redes sociales y presencia digital
+        - Ideas para atraer más clientes
+        - Orientación sobre gestión empresarial
+        - Mejora de descripciones de productos y negocios
+        - Estrategias de precios y promociones
+        
+        Contexto: Comuni IA es una plataforma que conecta negocios locales con clientes en Santa Cruz.
+        
+        Pregunta del usuario: "{user_msg}"
+        
+        Responde de forma:
+        - Práctica y accionable
+        - Específica para el contexto de Santa Cruz
+        - Con ejemplos concretos cuando sea posible
+        - En tono empático y motivador
+        - Usa emojis moderadamente (2-3 máximo)
+        - Máximo 2 párrafos
+        
+        Si la pregunta no está relacionada con negocios o emprendimiento, sugiere amablemente cómo puedes ayudar en ese ámbito.
+        """
+
         try:
-            resp = GEMINI_MODEL.generate_content(final_prompt)
-            text = resp.text.strip() if hasattr(resp, "text") else "No tengo una respuesta ahora."
-            return jsonify({"reply": format_gemini_response(text)})
+            resp = GEMINI_MODEL.generate_content(assistant_prompt)
+            reply = resp.text.strip() if hasattr(resp, "text") else "¡Claro! Estoy aquí para ayudarte con tu negocio. ¿En qué aspecto específico necesitas consejos? 💼"
+            
+            # Añadir mensaje de contexto sobre búsqueda
+            reply += "\n\n💡 *¿Buscas productos o servicios específicos? Solo dime 'busco [lo que necesites]' y te ayudo a encontrar.*"
+            
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"Error con Gemini en modo asistente: {e}")
+            reply = "¡Claro! Estoy aquí para ayudarte con consejos para tu negocio. ¿En qué área necesitas ayuda: marketing, ventas, redes sociales o gestión? 💼"
 
-    # --- PROMPT FINAL PARA GEMINI ---
-    final_prompt = (
-        "Eres el asistente de 'Comuni IA', un directorio de negocios locales en Santa Cruz, Bolivia. "
-        "Responde de forma amable y útil según la búsqueda del usuario. "
-        "Muestra los negocios o menús encontrados de manera clara.\n\n"
-        f"Consulta del usuario: {user_msg}\n\n"
-        f"Contexto encontrado:\n{response_context}\n\n"
-        "Redacta una respuesta amigable para el usuario."
-    )
+        return jsonify({"reply": format_gemini_response(reply)})
 
-    try:
-        resp = GEMINI_MODEL.generate_content(final_prompt)
-        text = resp.text.strip() if hasattr(resp, "text") else response_context
-        return jsonify({"reply": format_gemini_response(text)})
-    except Exception:
-        return jsonify({"reply": format_gemini_response(response_context)})
+    # --- MODO CONVERSACIÓN GENERAL (por defecto) ---
+    else:
+        # PROMPT PARA CONVERSACIÓN GENERAL SOBRE COMUNI IA
+        general_prompt = f"""
+        Eres GuIA, el asistente virtual de Comuni IA en Santa Cruz, Bolivia.
+        
+        Comuni IA es una plataforma que conecta negocios locales con clientes. Los usuarios pueden:
+        - Buscar y comprar productos de negocios locales
+        - Encontrar servicios profesionales
+        - Reservar productos
+        - Contactar directamente con los negocios
+        
+        Tu rol es:
+        1. Presentar la plataforma amablemente
+        2. Ofrecer ayuda para encontrar productos/servicios
+        3. Dar información general sobre Comuni IA
+        4. Redirigir a búsquedas específicas cuando sea necesario
+        
+        Pregunta del usuario: "{user_msg}"
+        
+        Responde de forma:
+        - Amigable y acogedora
+        - Breve y directa
+        - Con 1-2 emojis relevantes
+        - Invitando a usar las funciones de búsqueda
+        - Específica para Santa Cruz, Bolivia
+        
+        Si no estás seguro, ofrece ayudar a buscar productos o servicios.
+        """
+
+        try:
+            resp = GEMINI_MODEL.generate_content(general_prompt)
+            gemini_reply = resp.text.strip() if hasattr(resp, "text") else "¡Hola! Soy GuIA, tu asistente de Comuni IA. ¿En qué puedo ayudarte hoy? 😊"
+            
+            # Añadir sugerencia de búsqueda si es relevante
+            if any(word in user_msg_lower for word in ['hola', 'hello', 'hi', 'buenas']):
+                reply = gemini_reply
+            else:
+                reply = f"{gemini_reply}\n\n🔍 *¿Buscas algo específico? Puedo ayudarte a encontrar productos y servicios locales. Solo dime 'busco [lo que necesites]'.*"
+                
+        except Exception as e:
+            print(f"Error con Gemini en modo general: {e}")
+            reply = "¡Hola! Soy GuIA de Comuni IA. Puedo ayudarte a encontrar productos locales o darte consejos para tu negocio. ¿En qué te puedo ayudar? 🛍️"
+
+        return jsonify({"reply": format_gemini_response(reply)})
+#gemini chat endpoint
 
 # RUTAS DE PRODUCTOS (ACTUALIZADO: subida de imagen)
 @app.route('/api/products/<int:business_id>', methods=['POST'], strict_slashes=False)
@@ -644,6 +970,7 @@ def add_product(business_id):
     
     name = request.form.get('name', '').strip()
     price = float(request.form.get('price', 0))
+    stock = int(request.form.get('stock', 0)) # NUEVO CAMPO
     image_path = None
     
     if image and image.filename:
@@ -655,7 +982,7 @@ def add_product(business_id):
     if not name or price <= 0:
         return jsonify({"error": "Nombre y precio válido son requeridos"}), 400
     
-    product = Product(business_id=business_id, name=name, price=price, image_url=image_path)
+    product = Product(business_id=business_id, name=name, price=price, stock=stock, image_url=image_path)
     db.session.add(product)
     db.session.commit()
     
@@ -665,6 +992,7 @@ def add_product(business_id):
             "id": product.id,
             "name": product.name,
             "price": product.price,
+            "stock": product.stock,
             "image_url": product.image_url
         }
     })
@@ -684,6 +1012,7 @@ def manage_product(product_id):
                 name = request.form.get('name', '').strip()
                 price = float(request.form.get('price', 0))
                 description = request.form.get('description', '').strip()
+                stock = int(request.form.get('stock', 0)) # NUEVO CAMPO
                 
                 if not name or price <= 0:
                     return jsonify({"error": "Nombre y precio válido son requeridos"}), 400
@@ -703,6 +1032,7 @@ def manage_product(product_id):
                 product.name = name
                 product.price = price
                 product.description = description
+                product.stock = stock
                 db.session.commit()
                 return jsonify({"success": True})
     
@@ -928,6 +1258,79 @@ def delete_business(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': f'Error al eliminar negocio: {str(e)}'}), 500
+
+# ============================================
+# RUTAS DE RESERVAS
+# ============================================
+
+@app.route('/api/reservations', methods=['POST'], strict_slashes=False)
+@login_required
+def create_reservation():
+    data = request.get_json()
+    product_id = data.get('product_id')
+    quantity = data.get('quantity')
+    notes = data.get('notes', '')
+
+    if not product_id or not quantity:
+        return jsonify({'success': False, 'error': 'Faltan datos (producto o cantidad).'}), 400
+
+    try:
+        quantity = int(quantity)
+        if quantity <= 0:
+            raise ValueError("La cantidad debe ser positiva.")
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': 'La cantidad debe ser un número válido.'}), 400
+
+    product = Product.query.get_or_404(product_id)
+
+    if product.stock < quantity:
+        return jsonify({'success': False, 'error': f'Stock insuficiente. Solo quedan {product.stock} unidades.'}), 400
+
+    try:
+        # Crear la reserva
+        reservation = Reservation(
+            user_id=session['user_id'],
+            product_id=product.id,
+            business_id=product.business_id,
+            quantity=quantity,
+            notes=notes
+        )
+        # Reducir el stock
+        product.stock -= quantity
+
+        db.session.add(reservation)
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': '¡Reserva creada con éxito!'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'Error al procesar la reserva: {str(e)}'}), 500
+
+@app.route('/api/reservations/<int:reservation_id>/status', methods=['POST'], strict_slashes=False)
+@login_required
+def update_reservation_status(reservation_id):
+    reservation = Reservation.query.get_or_404(reservation_id)
+    user = User.query.get(session['user_id'])
+
+    # Solo el dueño del negocio puede cambiar el estado
+    if user.business_id != reservation.business_id:
+        abort(403)
+
+    new_status = request.json.get('status')
+    reservation.status = new_status
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': f'Reserva actualizada a {new_status}.'})
+
+@app.route('/my-reservations', strict_slashes=False)
+@login_required
+def my_reservations():
+    """Página para que el cliente vea el estado de sus reservas."""
+    user_id = session['user_id']
+    # Hacemos un join para poder acceder fácilmente al nombre del producto y del negocio
+    reservations = db.session.query(Reservation).filter_by(user_id=user_id).order_by(Reservation.created_at.desc()).all()
+    
+    return render_template('my_reservations.html', reservations=reservations)
 
 # ============================================
 # ERROR HANDLERS

@@ -1,0 +1,11 @@
+/* static/css/custom-driver.css */
+
+:root {
+  --driver-popover-bg: #ffffff;
+  --driver-popover-title-color: #1e293b;
+  --driver-popover-description-color: #64748b;
+  --driver-button-bg: #667eea;
+  --driver-button-hover-bg: #764ba2;
+  --driver-button-text-color: #ffffff;
+  --driver-overlay-bg: rgba(30, 41, 59, 0.7);
+}

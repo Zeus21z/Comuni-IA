@@ -1,0 +1,169 @@
+================================================================================
+CREDENCIALES DE ACCESO - COMUNI IA
+================================================================================
+
+Total de Negocios: 18 (2 por categoría)
+Fecha de Creación: 26/10/2025 20:19
+
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: GASTRONOMÍA
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Pizza Italia
+Email: pizzaitalia@email.com
+Contraseña: pizza123
+Productos: 5
+URL: http://localhost:5000/login
+
+Negocio: Café Aroma
+Email: cafearoma@email.com
+Contraseña: cafe123
+Productos: 5
+URL: http://localhost:5000/login
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: MODA Y ROPA
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Moda Urbana
+Email: modaurbana@email.com
+Contraseña: moda123
+Productos: 5
+URL: http://localhost:5000/login
+
+Negocio: Boutique Chic
+Email: boutiquechic@email.com
+Contraseña: chic123
+Productos: 5
+URL: http://localhost:5000/login
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: SERVICIOS PROFESIONALES
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Contadores Asociados
+Email: contadores@email.com
+Contraseña: conta123
+Productos: 4
+URL: http://localhost:5000/login
+
+Negocio: Abogados Santa Cruz
+Email: abogadossc@email.com
+Contraseña: legal123
+Productos: 4
+URL: http://localhost:5000/login
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: BELLEZA Y CUIDADO PERSONAL
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Salón Bella
+Email: salonbella@email.com
+Contraseña: bella123
+Productos: 5
+URL: http://localhost:5000/login
+
+Negocio: Barbería King
+Email: barberking@email.com
+Contraseña: barber123
+Productos: 5
+URL: http://localhost:5000/login
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: HOGAR Y DECORACIÓN
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Decora Home
+Email: decorahome@email.com
+Contraseña: decor123
+Productos: 5
+URL: http://localhost:5000/login
+
+Negocio: Plantas Verdes
+Email: plantasverdes@email.com
+Contraseña: plantas123
+Productos: 5
+URL: http://localhost:5000/login
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: TECNOLOGÍA
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Tech Store
+Email: techstore@email.com
+Contraseña: tech123
+Productos: 5
+URL: http://localhost:5000/login
+
+Negocio: Repara Tech
+Email: reparatech@email.com
+Contraseña: repara123
+Productos: 5
+URL: http://localhost:5000/login
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: SALUD Y BIENESTAR
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Gym Power
+Email: gympower@email.com
+Contraseña: gym123
+Productos: 5
+URL: http://localhost:5000/login
+
+Negocio: Yoga Zen
+Email: yogazen@email.com
+Contraseña: yoga123
+Productos: 5
+URL: http://localhost:5000/login
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: EDUCACIÓN
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Inglés Fast
+Email: inglesfast@email.com
+Contraseña: ingles123
+Productos: 5
+URL: http://localhost:5000/login
+
+Negocio: Clases Particulares Matemáticas
+Email: clasesmate@email.com
+Contraseña: mate123
+Productos: 4
+URL: http://localhost:5000/login
+
+
+────────────────────────────────────────────────────────────────────────────────
+CATEGORÍA: OTROS
+────────────────────────────────────────────────────────────────────────────────
+
+Negocio: Foto Studio
+Email: fotostudio@email.com
+Contraseña: foto123
+Productos: 5
+URL: http://localhost:5000/login
+
+Negocio: Eventos Mágicos
+Email: eventosmagicos@email.com
+Contraseña: eventos123
+Productos: 5
+URL: http://localhost:5000/login
+
+================================================================================
+NOTAS:
+- Todas las contraseñas son simples para propósitos de testing
+- Los productos NO tienen imágenes (puedes agregarlas después)
+- Cada negocio tiene entre 4-5 productos específicos
+- Para cambiar contraseñas, hazlo desde el panel de admin
+================================================================================
