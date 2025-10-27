@@ -280,15 +280,49 @@ body {
    FOOTER
 ---------------------------- */
 footer.main-footer {
-  background-color: var(--white);
+  background-color: var(--text-dark);
   color: var(--text-light);
-  padding: 1.5rem 0;
+  padding: 3rem 0 1.5rem 0;
   margin-top: 3rem;
   border-top: 1px solid var(--border-color);
+  position: relative;
+}
+
+/* --- CORRECCIÓN: Hacer visible el SVG de conexiones en el footer --- */
+.connection-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Para que no interfiera con los clics en el footer */
+  z-index: 0;
+}
+
+footer.main-footer h5,
+footer.main-footer .small {
+  color: var(--white);
 }
 
 footer.main-footer a {
   color: var(--text-light);
+  margin: 0 10px;
+  transition: color 0.3s ease;
+}
+
+/* --- CORRECCIÓN: Mejorar legibilidad del texto en el footer --- */
+footer.main-footer, footer.main-footer h6, footer.main-footer p {
+  color: #e2e8f0; /* Un color claro que contrasta bien con el fondo oscuro */
+  margin: 0 10px;
+  transition: color 0.3s ease;
+}
+
+/* CORRECCIÓN ADICIONAL: Asegurar que la clase .text-muted sea legible en el footer */
+footer.main-footer .text-muted {
+  color: #adb5bd !important; /* Un gris claro, !important para sobreescribir Bootstrap */
+}
+
+footer.main-footer, footer.main-footer a {
   margin: 0 10px;
   transition: color 0.3s ease;
 }

@@ -1,9 +1,221 @@
 /* static/css/developers.css */
 
 .developer-photo {
-  width: 60px;
-  height: 60px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid var(--primary-color);
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 20px rgba(11, 133, 190, 0.5);
+  transition: all 0.3s ease;
+}
+
+.developer-photo:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 30px rgba(11, 133, 190, 0.8);
+}
+
+/* Make sure content is above the SVG */
+.main-footer .d-flex, 
+.main-footer h5, 
+.main-footer h6, 
+.main-footer p, 
+.main-footer h2 {
+    position: relative;
+    z-index: 1;
+}
+
+/* --- SYNCS Logo con efecto Glitch y Carga --- */
+.syncs-logo {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 3rem;
+  color: #0b85be;
+  text-align: center;
+  position: relative;
+  animation: glitch-skew 1s infinite linear alternate-reverse, charging-pulse 2s infinite ease-in-out;
+  text-shadow: 0 0 10px currentColor;
+  transition: all 0.3s ease;
+}
+
+.syncs-logo::before,
+.syncs-logo::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.syncs-logo::before {
+  left: 2px;
+  text-shadow: -2px 0 #ff00ff;
+  clip: rect(44px, 450px, 56px, 0);
+  animation: glitch-anim 5s infinite linear alternate-reverse;
+}
+
+.syncs-logo::after {
+  left: -2px;
+  text-shadow: -2px 0 #00ffff, 2px 2px #ff0000;
+  clip: rect(85px, 450px, 90px, 0);
+  animation: glitch-anim-2 5s infinite linear alternate-reverse;
+}
+
+/* Animación de pulso de carga */
+@keyframes charging-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 10px currentColor);
+  }
+  50% {
+    filter: drop-shadow(0 0 25px currentColor) drop-shadow(0 0 35px currentColor);
+    transform: scale(1.02);
+  }
+}
+
+@keyframes glitch-anim {
+  0% { clip: rect(3px, 9999px, 87px, 0); transform: skew(0.3deg); }
+  5% { clip: rect(23px, 9999px, 3px, 0); }
+  10% { clip: rect(12px, 9999px, 65px, 0); }
+  15% { clip: rect(55px, 9999px, 8px, 0); }
+  20% { clip: rect(69px, 9999px, 53px, 0); }
+  25% { clip: rect(2px, 9999px, 78px, 0); }
+  30% { clip: rect(80px, 9999px, 4px, 0); }
+  35% { clip: rect(59px, 9999px, 29px, 0); }
+  40% { clip: rect(4px, 9999px, 81px, 0); }
+  45% { clip: rect(63px, 9999px, 19px, 0); }
+  50% { clip: rect(4px, 9999px, 60px, 0); }
+  55% { clip: rect(74px, 9999px, 7px, 0); }
+  60% { clip: rect(34px, 9999px, 89px, 0); }
+  65% { clip: rect(81px, 9999px, 17px, 0); }
+  70% { clip: rect(10px, 9999px, 88px, 0); }
+  75% { clip: rect(65px, 9999px, 3px, 0); }
+  80% { clip: rect(30px, 9999px, 60px, 0); }
+  85% { clip: rect(8px, 9999px, 41px, 0); }
+  90% { clip: rect(41px, 9999px, 8px, 0); }
+  95% { clip: rect(8px, 9999px, 66px, 0); }
+  100% { clip: rect(2px, 9999px, 83px, 0); transform: skew(-0.2deg); }
+}
+
+@keyframes glitch-anim-2 {
+  0% { clip: rect(62px, 9999px, 8px, 0); transform: skew(0.2deg); }
+  10% { clip: rect(81px, 9999px, 48px, 0); }
+  20% { clip: rect(15px, 9999px, 73px, 0); }
+  30% { clip: rect(52px, 9999px, 21px, 0); }
+  40% { clip: rect(37px, 9999px, 65px, 0); }
+  50% { clip: rect(68px, 9999px, 9px, 0); }
+  60% { clip: rect(4px, 9999px, 71px, 0); }
+  70% { clip: rect(58px, 9999px, 31px, 0); }
+  80% { clip: rect(19px, 9999px, 85px, 0); }
+  90% { clip: rect(74px, 9999px, 12px, 0); }
+  100% { clip: rect(8px, 9999px, 62px, 0); transform: skew(-0.3deg); }
+}
+
+@keyframes glitch-skew {
+  0% { transform: skew(-3deg); }
+  10% { transform: skew(3deg); }
+  20% { transform: skew(-2deg); }
+  30% { transform: skew(2deg); }
+  40% { transform: skew(-1deg); }
+  50% { transform: skew(1deg); }
+  60% { transform: skew(0deg); }
+  100% { transform: skew(0deg); }
+}
+
+/* --- Líneas de Conexión Mejoradas --- */
+.connection-line {
+  stroke-width: 2px;
+  opacity: 0.7;
+  filter: url(#glow);
+  transition: all 0.3s ease;
+}
+
+/* Pulsos de las líneas */
+@keyframes pulse-line-1 { 
+  0%, 100% { 
+    opacity: 0.5; 
+    stroke-width: 1.5px; 
+  } 
+  50% { 
+    opacity: 1; 
+    stroke-width: 3px; 
+  } 
+}
+
+@keyframes pulse-line-2 { 
+  0%, 100% { 
+    opacity: 0.5; 
+    stroke-width: 1.5px; 
+  } 
+  50% { 
+    opacity: 1; 
+    stroke-width: 3px; 
+  } 
+}
+
+@keyframes pulse-line-3 { 
+  0%, 100% { 
+    opacity: 0.5; 
+    stroke-width: 1.5px; 
+  } 
+  50% { 
+    opacity: 1; 
+    stroke-width: 3px; 
+  } 
+}
+
+@keyframes pulse-line-4 { 
+  0%, 100% { 
+    opacity: 0.5; 
+    stroke-width: 1.5px; 
+  } 
+  50% { 
+    opacity: 1; 
+    stroke-width: 3px; 
+  } 
+}
+
+.line-pulse-1 { animation: pulse-line-1 2s infinite ease-in-out; }
+.line-pulse-2 { animation: pulse-line-2 2s infinite ease-in-out 0.3s; }
+.line-pulse-3 { animation: pulse-line-3 2s infinite ease-in-out 0.6s; }
+.line-pulse-4 { animation: pulse-line-4 2s infinite ease-in-out 0.9s; }
+
+/* Brillos que viajan por las líneas */
+.connection-glow {
+  filter: url(#glow);
+  opacity: 0.9;
+}
+
+/* Partículas flotantes */
+.connection-particle {
+  filter: url(#glow);
+}
+
+/* Efecto hover en los nombres de desarrolladores */
+.main-footer h6 {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.main-footer h6:hover {
+  transform: translateY(-2px);
+  text-shadow: 0 0 10px currentColor;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .syncs-logo {
+    font-size: 2rem;
+  }
+  
+  .developer-photo {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .connection-line {
+    stroke-width: 1.5px;
+  }
 }

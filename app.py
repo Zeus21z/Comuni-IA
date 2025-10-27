@@ -956,7 +956,7 @@ def chat():
                 
         except Exception as e:
             print(f"Error con Gemini en modo general: {e}")
-            reply = "¡Hola! Soy GuIA de Comuni IA. Puedo ayudarte a encontrar productos locales o darte consejos para tu negocio. ¿En qué te puedo ayudar? 🛍️"
+            reply = "¡Hola! Soy Gu-IA de Comuni IA. Puedo ayudarte a encontrar productos locales o darte consejos para tu negocio. ¿En qué te puedo ayudar? 🛍️"
 
         return jsonify({"reply": format_gemini_response(reply)})
 #gemini chat endpoint
