@@ -6,6 +6,7 @@ from sqlalchemy import text
 from dotenv import load_dotenv
 import google.generativeai as genai
 from werkzeug.security import generate_password_hash, check_password_hash
+from thefuzz import fuzz
 from functools import wraps
 from flask_uploads import UploadSet, configure_uploads, IMAGES
 
